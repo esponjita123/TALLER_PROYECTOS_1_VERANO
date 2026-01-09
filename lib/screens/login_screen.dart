@@ -1,0 +1,150 @@
+import 'package:flutter/material.dart';
+import '../data/fake_db.dart';
+import 'register_screen.dart';
+import 'home_screen.dart';
+
+class LoginScreen extends StatelessWidget {
+  final String role;
+
+  LoginScreen({required this.role, super.key});
+
+  final emailCtrl = TextEditingController();
+  final passCtrl = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(
+        title: const Text("Iniciar sesión"),
+        centerTitle: true,
+        elevation: 0,
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          child: Container(
+            margin: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  role == "empresa"
+                      ? "Acceso para Empresas"
+                      : "Acceso para Postulantes",
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                const Text(
+                  "Ingresa tus datos para continuar",
+                  style: TextStyle(color: Colors.black54),
+                ),
+
+                const SizedBox(height: 30),
+
+                TextField(
+                  controller: emailCtrl,
+                  decoration: InputDecoration(
+                    labelText: "Correo electrónico",
+                    prefixIcon: const Icon(Icons.email),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                TextField(
+                  controller: passCtrl,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: "Contraseña",
+                    prefixIcon: const Icon(Icons.lock),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 30),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          role == "empresa" ? Colors.green : Colors.blue,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: const Text(
+                      "INGRESAR",
+                      style: TextStyle(
+                        fontSize: 16,
+                        letterSpacing: 1,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    onPressed: () {
+                      for (var u in users) {
+                        if (u.email == emailCtrl.text &&
+                            u.password == passCtrl.text &&
+                            u.role == role) {
+                          loggedUser = u;
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(builder: (_) => HomeScreen()),
+                          );
+                          return;
+                        }
+                      }
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Usuario o contraseña incorrectos"),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 15),
+
+                TextButton(
+                  child: const Text("¿No tienes cuenta? Regístrate"),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => RegisterScreen(role: role),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
