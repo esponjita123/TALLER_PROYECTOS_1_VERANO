@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "182753411937",
+    "project_id": "wancatrabajo",
+    "storage_bucket": "wancatrabajo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:182753411937:android:df5a836bf720ef62293b20",
+        "android_client_info": {
+          "package_name": "com.example.taller_proyectos_1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCScsXrXypyhKoDxxjWuhjzgaNZfbsBX4g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

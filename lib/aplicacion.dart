@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'screens/role_screen.dart';
+import 'pantallas/pantalla_splash.dart';
 
 class JobLinkApp extends StatelessWidget {
   const JobLinkApp({super.key});
@@ -8,8 +8,9 @@ class JobLinkApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'JobLink',
-      home: RoleScreen(),
+      title: 'Wanka Trabajo',
+      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
+      home: const SplashScreen(),
     );
   }
 }
