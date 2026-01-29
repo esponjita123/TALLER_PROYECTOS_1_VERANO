@@ -12,48 +12,52 @@ class EditProfileScreen extends StatefulWidget {
   State<EditProfileScreen> createState() => _EditProfileScreenState();
 }
 
-class _EditProfileScreenState extends State<EditProfileScreen> {
+class _EditProfileScreenState extends State<EditProfileScreen>
+    with SingleTickerProviderStateMixin {
   final nameCtrl = TextEditingController();
   final phoneCtrl = TextEditingController();
   final bioCtrl = TextEditingController();
+  final skillInputCtrl = TextEditingController();
 
   File? _imageFile;
   String? _existingImageBase64;
   final ImagePicker _picker = ImagePicker();
 
-  // Nuevos campos para ML Profile
-  final skillInputCtrl = TextEditingController();
   List<String> _skills = [];
-  String _experience = 'Junior'; // Valor por defecto
+  String _experience = 'Junior';
   final List<String> _experienceLevels = ['Junior', 'Mid', 'Senior', 'Lead'];
 
   bool _isLoading = false;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
+    );
+    _animationController.forward();
+
     if (loggedUser != null) {
       nameCtrl.text = loggedUser!.name;
       phoneCtrl.text = loggedUser!.phone;
-      nameCtrl.text = loggedUser!.name;
-      phoneCtrl.text = loggedUser!.phone;
       bioCtrl.text = loggedUser!.bio;
-
-      // Cargar skills y experiencia existentes
       _skills = List.from(loggedUser!.skills);
-      if (loggedUser!.experience.isNotEmpty) {
-        _experience = loggedUser!.experience;
-      }
+      _experience =
+          loggedUser!.experience.isNotEmpty ? loggedUser!.experience : 'Junior';
 
-      // Normalizar experiencia si no coincide con los niveles definidos
       if (!_experienceLevels.contains(_experience)) {
         _experience = 'Mid';
       }
 
-      if (loggedUser!.profileImagePath.isNotEmpty) {
-        if (ImageService.isBase64(loggedUser!.profileImagePath)) {
-          _existingImageBase64 = loggedUser!.profileImagePath;
-        }
+      if (loggedUser!.profileImagePath.isNotEmpty &&
+          ImageService.isBase64(loggedUser!.profileImagePath)) {
+        _existingImageBase64 = loggedUser!.profileImagePath;
       }
     }
   }
@@ -88,7 +92,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     try {
       String imageBase64 = _existingImageBase64 ?? '';
-
       if (_imageFile != null) {
         imageBase64 = ImageService.imageToBase64(_imageFile!);
       }
@@ -126,20 +129,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void _showSnackBar(String message, {required bool isError}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              isError ? Icons.error_outline : Icons.check_circle,
-              color: Colors.white,
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
-          ],
-        ),
+        content: Text(message),
         backgroundColor: isError ? Colors.red.shade600 : Colors.green.shade600,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
@@ -147,261 +140,153 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.purple.shade700, Colors.grey.shade50],
-            stops: const [0.0, 0.3],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Custom AppBar
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.white.withOpacity(0.2),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    const Text(
-                      'Editar Perfil',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          // Background Gradient Deco
+          Positioned(
+            top: -150,
+            left: -100,
+            child: Container(
+              width: 400,
+              height: 400,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [Colors.purple.withOpacity(0.1), Colors.transparent],
                 ),
               ),
+            ),
+          ),
 
-              // Content
-              Expanded(
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(30),
-                    ),
-                  ),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      children: [
-                        // Profile Picture
-                        GestureDetector(
-                          onTap: _pickImage,
-                          child: Stack(
-                            children: [
-                              Container(
-                                width: 140,
-                                height: 140,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.purple.withOpacity(0.3),
-                                      blurRadius: 20,
-                                      spreadRadius: 5,
-                                    ),
-                                  ],
-                                ),
-                                child: ClipOval(child: _buildProfileImage()),
-                              ),
-                              Positioned(
-                                bottom: 0,
-                                right: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.purple.shade700,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 3,
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.camera_alt,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
-                                ),
-                              ),
-                            ],
+          SafeArea(
+            child: Column(
+              children: [
+                _buildHeader(context),
+                Expanded(
+                  child: FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 8,
+                      ),
+                      child: Column(
+                        children: [
+                          _buildProfileImageSection(),
+                          const SizedBox(height: 32),
+                          _buildSectionTitle('Información Personal'),
+                          const SizedBox(height: 16),
+                          _buildPremiumTextField(
+                            controller: nameCtrl,
+                            label: 'Nombre completo',
+                            icon: Icons.person_outline_rounded,
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Toca para cambiar foto',
-                          style: TextStyle(color: Colors.grey, fontSize: 14),
-                        ),
-                        const SizedBox(height: 32),
-
-                        // Name
-                        _buildTextField(
-                          controller: nameCtrl,
-                          label: 'Nombre completo',
-                          icon: Icons.person_outline,
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Phone
-                        _buildTextField(
-                          controller: phoneCtrl,
-                          label: 'Teléfono',
-                          icon: Icons.phone_outlined,
-                          keyboardType: TextInputType.phone,
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Bio
-                        _buildTextField(
-                          controller: bioCtrl,
-                          label: 'Biografía',
-                          icon: Icons.info_outline,
-                          maxLines: 4,
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Skills Section - CRUCIAL PARA ML
-                        const Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Habilidades (Para recomendaciones IA)',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
+                          const SizedBox(height: 16),
+                          _buildPremiumTextField(
+                            controller: phoneCtrl,
+                            label: 'Teléfono de contacto',
+                            icon: Icons.phone_android_rounded,
+                            keyboardType: TextInputType.phone,
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildTextField(
-                                controller: skillInputCtrl,
-                                label: 'Agregar habilidad (ej: Flutter)',
-                                icon: Icons.code,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              onPressed: _addSkill,
-                              icon: const Icon(Icons.add_circle),
-                              color: Colors.purple,
-                              iconSize: 40,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        _buildSkillsChips(),
-                        const SizedBox(height: 24),
-
-                        // Experience Level Section
-                        const Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Nivel de Experiencia',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
+                          const SizedBox(height: 16),
+                          _buildPremiumTextField(
+                            controller: bioCtrl,
+                            label: 'Sobre mí / Biografía',
+                            icon: Icons.history_edu_rounded,
+                            maxLines: 3,
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade50,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.grey.shade200),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: _experience,
-                              isExpanded: true,
-                              icon: Icon(
-                                Icons.arrow_drop_down,
-                                color: Colors.purple.shade700,
-                              ),
-                              items:
-                                  _experienceLevels.map((String value) {
-                                    return DropdownMenuItem<String>(
-                                      value: value,
-                                      child: Text(value),
-                                    );
-                                  }).toList(),
-                              onChanged: (newValue) {
-                                setState(() {
-                                  _experience = newValue!;
-                                });
-                              },
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-
-                        // Save Button
-                        SizedBox(
-                          width: double.infinity,
-                          height: 56,
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _saveProfile,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.purple.shade700,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              elevation: 4,
-                            ),
-                            child:
-                                _isLoading
-                                    ? const SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                    : const Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.save_outlined),
-                                        SizedBox(width: 12),
-                                        Text(
-                                          'GUARDAR CAMBIOS',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                            letterSpacing: 1,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                          ),
-                        ),
-                      ],
+                          const SizedBox(height: 32),
+                          _buildSectionTitle('Habilidades e IA'),
+                          const SizedBox(height: 16),
+                          _buildSkillsInputSection(),
+                          const SizedBox(height: 16),
+                          _buildSkillsChips(),
+                          const SizedBox(height: 32),
+                          _buildSectionTitle('Nivel Profesional'),
+                          const SizedBox(height: 16),
+                          _buildExperienceSelector(),
+                          const SizedBox(height: 40),
+                          _buildSaveButton(),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.grey.shade100,
+              foregroundColor: Colors.purple.shade700,
+            ),
+          ),
+          const SizedBox(width: 16),
+          const Text(
+            'Mi Perfil',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF2E3E5C),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileImageSection() {
+    return Center(
+      child: Stack(
+        alignment: Alignment.bottomRight,
+        children: [
+          Container(
+            width: 130,
+            height: 130,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 4),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.purple.withOpacity(0.2),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: ClipOval(child: _buildProfileImage()),
+          ),
+          GestureDetector(
+            onTap: _pickImage,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.purple.shade600,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 3),
+              ),
+              child: const Icon(
+                Icons.camera_alt_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -416,44 +301,259 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
     } else {
       return Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.purple.shade300, Colors.purple.shade600],
-          ),
+        color: Colors.grey.shade100,
+        child: Icon(
+          Icons.person_rounded,
+          size: 60,
+          color: Colors.purple.shade200,
         ),
-        child: const Icon(Icons.person, size: 70, color: Colors.white),
       );
     }
   }
 
-  Widget _buildTextField({
+  Widget _buildSectionTitle(String title) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        title.toUpperCase(),
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          color: Colors.purple.shade700,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumTextField({
     required TextEditingController controller,
     required String label,
     required IconData icon,
     int maxLines = 1,
     TextInputType? keyboardType,
   }) {
-    return TextField(
-      controller: controller,
-      maxLines: maxLines,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: Colors.purple.shade700),
-        filled: true,
-        fillColor: Colors.grey.shade50,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.shade100),
+      ),
+      child: TextField(
+        controller: controller,
+        maxLines: maxLines,
+        keyboardType: keyboardType,
+        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(
+            color: Colors.blueGrey.shade400,
+            fontWeight: FontWeight.w500,
+          ),
+          prefixIcon: Icon(icon, color: Colors.purple.shade400, size: 22),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+          floatingLabelStyle: TextStyle(
+            color: Colors.purple.shade700,
+            fontWeight: FontWeight.w900,
+          ),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.grey.shade200),
+      ),
+    );
+  }
+
+  Widget _buildSkillsInputSection() {
+    return Row(
+      children: [
+        Expanded(
+          child: _buildPremiumTextField(
+            controller: skillInputCtrl,
+            label: 'Añadir habilidad (ej: Flutter)',
+            icon: Icons.auto_awesome_rounded,
+          ),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.purple.shade700, width: 2),
+        const SizedBox(width: 12),
+        GestureDetector(
+          onTap: _addSkill,
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.purple.shade500, Colors.purple.shade800],
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(Icons.add_rounded, color: Colors.white),
+          ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildSkillsChips() {
+    if (_skills.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.orange.shade50,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.orange.shade100),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.lightbulb_outline_rounded,
+              color: Colors.orange.shade700,
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Añade habilidades para que la IA te sugiera mejores empleos.',
+                style: TextStyle(
+                  color: Colors.orange,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children:
+          _skills.map((skill) {
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.purple.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.purple.shade100),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    skill,
+                    style: TextStyle(
+                      color: Colors.purple.shade800,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () => _removeSkill(skill),
+                    child: Icon(
+                      Icons.close_rounded,
+                      size: 16,
+                      color: Colors.purple.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+    );
+  }
+
+  Widget _buildExperienceSelector() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.shade100),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _experience,
+          isExpanded: true,
+          icon: Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: Colors.purple.shade700,
+          ),
+          style: const TextStyle(
+            color: Colors.black87,
+            fontWeight: FontWeight.w600,
+            fontSize: 15,
+          ),
+          items:
+              _experienceLevels.map((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(value),
+                );
+              }).toList(),
+          onChanged: (newValue) {
+            setState(() => _experience = newValue!);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSaveButton() {
+    return Container(
+      width: double.infinity,
+      height: 58,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.purple.shade600, Colors.purple.shade800],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.purple.withOpacity(0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : _saveProfile,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+        child:
+            _isLoading
+                ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+                : const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline_rounded,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'GUARDAR PERFIL',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ],
+                ),
       ),
     );
   }
@@ -469,59 +569,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   void _removeSkill(String skill) {
-    setState(() {
-      _skills.remove(skill);
-    });
-  }
-
-  Widget _buildSkillsChips() {
-    if (_skills.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: Colors.orange.shade50,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.orange.shade200),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.warning_amber_rounded,
-              color: Colors.orange.shade700,
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            const Expanded(
-              child: Text(
-                'Agrega habilidades para recibir recomendaciones de empleo personalizadas.',
-                style: TextStyle(color: Colors.orange, fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children:
-          _skills.map((skill) {
-            return Chip(
-              label: Text(skill),
-              labelStyle: const TextStyle(color: Colors.white),
-              backgroundColor: Colors.purple.shade400,
-              deleteIcon: const Icon(
-                Icons.close,
-                size: 16,
-                color: Colors.white,
-              ),
-              onDeleted: () => _removeSkill(skill),
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-            );
-          }).toList(),
-    );
+    setState(() => _skills.remove(skill));
   }
 
   @override
@@ -530,6 +578,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     phoneCtrl.dispose();
     bioCtrl.dispose();
     skillInputCtrl.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 }

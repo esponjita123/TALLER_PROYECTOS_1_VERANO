@@ -1,41 +1,68 @@
+import 'dart:convert';
+import 'package:flutter/services.dart';
+import 'package:tflite_flutter/tflite_flutter.dart';
 import '../modelos/modelo_empleo.dart';
 import '../modelos/modelo_usuario.dart';
+import '../utilidades/normalizador_datos.dart';
 
-/// Servicio de recomendación de empleos usando algoritmo basado en reglas
+/// Servicio de recomendación de empleos e inteligencia de matching
 class RecommendationService {
-  /// Calcula el score de relevancia entre un empleo y un usuario
-  /// Retorna un valor entre 0 y 100
+  static Interpreter? _interpreter;
+  static Map<String, dynamic>? _encoders;
+
+  /// Inicializa el motor de TFLite
+  static Future<void> initialize() async {
+    try {
+      _interpreter = await Interpreter.fromAsset(
+        'assets/ml/modelo_recomendacion.tflite',
+      );
+      final encoderString = await rootBundle.loadString(
+        'assets/ml/encoders.json',
+      );
+      _encoders = json.decode(encoderString);
+      print('TFLite: Modelo cargado exitosamente');
+    } catch (e) {
+      print(
+        'TFLite Error: No se pudo cargar el modelo. Usando sistema de reglas. $e',
+      );
+    }
+  }
+
+  /// Calcula el score de relevancia entre un empleo y un usuario (0.0 a 100.0)
   static double calculateRelevanceScore(Job job, AppUser user) {
+    if (_interpreter != null && _encoders != null) {
+      return _calculateMLScore(job, user);
+    }
+
+    // Sistema basado en reglas mejorado
     double score = 0.0;
 
-    // Factor 1: Skills Match (40% del score total)
-    score += _calculateSkillsMatch(job, user) * 0.4;
+    // 1. Skill Match Ratio (50% del score total) - Usando Normalizador
+    final matchRatio = DataNormalizer.calculateMatchRatio(
+      user.skills,
+      job.requirements,
+    );
+    score += matchRatio * 50.0;
 
-    // Factor 2: Experience Level (25% del score total)
-    score += _calculateExperienceMatch(job, user) * 0.25;
+    // 2. Experience Level Match (20% del score total)
+    score += _calculateExperienceMatch(job, user) * 0.20;
 
-    // Factor 3: Location History (15% del score total)
+    // 3. Location History (15% del score total)
     score += _calculateLocationMatch(job, user) * 0.15;
 
-    // Factor 4: Job Freshness (10% del score total)
-    score += _calculateFreshnessScore(job) * 0.10;
-
-    // Factor 5: Salary Range (10% del score total)
-    score += _calculateSalaryScore(job) * 0.10;
+    // 4. Freshness & Salary (15% del score total)
+    score += _calculateFreshnessScore(job) * 0.08;
+    score += _calculateSalaryScore(job) * 0.07;
 
     return score.clamp(0.0, 100.0);
   }
 
   /// Ordena una lista de empleos por relevancia para el usuario
   static List<Job> rankJobsByRelevance(List<Job> jobs, AppUser user) {
-    // Calcular y asignar matchScore a cada empleo
     for (var job in jobs) {
       job.matchScore = calculateRelevanceScore(job, user);
     }
-
-    // Ordenar por matchScore descendente
     jobs.sort((a, b) => b.matchScore.compareTo(a.matchScore));
-
     return jobs;
   }
 
@@ -45,208 +72,132 @@ class RecommendationService {
     return rankedJobs.where((job) => job.matchScore > 60).toList();
   }
 
-  // ========== MÉTODOS PRIVADOS DE CÁLCULO ==========
-
-  /// Calcula coincidencia de skills (retorna 0-100)
-  static double _calculateSkillsMatch(Job job, AppUser user) {
-    if (job.requirements.isEmpty || user.skills.isEmpty) {
-      return 30.0; // Score neutral si no hay datos
-    }
-
-    int matches = 0;
-    int totalRequirements = job.requirements.length;
-
-    for (var requirement in job.requirements) {
-      // Buscar coincidencias flexibles (case insensitive, substring)
-      final reqLower = requirement.toLowerCase();
-
-      for (var skill in user.skills) {
-        final skillLower = skill.toLowerCase();
-
-        // Match exacto o parcial
-        if (skillLower.contains(reqLower) || reqLower.contains(skillLower)) {
-          matches++;
-          break; // Solo contar una vez por requirement
-        }
-      }
-    }
-
-    // Calcular porcentaje de requirements cubiertos
-    double matchPercentage = (matches / totalRequirements) * 100;
-
-    // Bonus: si el usuario tiene más skills que los requeridos
-    if (user.skills.length > totalRequirements) {
-      matchPercentage += 5.0;
-    }
-
-    return matchPercentage.clamp(0.0, 100.0);
+  /// Ordena una lista de usuarios (postulantes) por idoneidad para un empleo
+  static List<AppUser> rankApplicants(Job job, List<AppUser> applicants) {
+    // Clasificar postulantes basándose en el score relativo al empleo
+    applicants.sort((a, b) {
+      final scoreA = calculateRelevanceScore(job, a);
+      final scoreB = calculateRelevanceScore(job, b);
+      return scoreB.compareTo(scoreA);
+    });
+    return applicants;
   }
+
+  // ========== MÉTODOS PRIVADOS DE CÁLCULO ==========
 
   /// Calcula coincidencia de nivel de experiencia (retorna 0-100)
   static double _calculateExperienceMatch(Job job, AppUser user) {
-    if (user.experience.isEmpty) {
-      return 50.0; // Score neutral
-    }
+    if (user.experience.isEmpty) return 50.0;
 
-    // Mapeo de niveles de experiencia
-    final Map<String, int> experienceLevels = {
+    final Map<String, int> levels = {
       'junior': 1,
       'mid': 2,
       'senior': 3,
       'lead': 4,
     };
+    final userLevel = _extractLevel(user.experience, levels);
+    final jobLevel = _extractLevel('${job.title} ${job.description}', levels);
 
-    // Extraer nivel del usuario
-    final userLevel = _extractExperienceLevel(
-      user.experience,
-      experienceLevels,
-    );
-
-    // Buscar nivel requerido en job.description o job.title
-    final jobText = '${job.title} ${job.description}'.toLowerCase();
-    int jobLevel = 2; // Default: mid-level
-
-    if (jobText.contains('junior') || jobText.contains('entry')) {
-      jobLevel = 1;
-    } else if (jobText.contains('senior') || jobText.contains('sr.')) {
-      jobLevel = 3;
-    } else if (jobText.contains('lead') || jobText.contains('principal')) {
-      jobLevel = 4;
-    }
-
-    // Calcular diferencia
-    final levelDifference = (userLevel - jobLevel).abs();
-
-    // Score basado en diferencia (0 = perfecto, 1 = bueno, 2+ = malo)
-    if (levelDifference == 0) {
-      return 100.0; // Match perfecto
-    } else if (levelDifference == 1) {
-      return 70.0; // Aceptable
-    } else {
-      return 30.0; // Mismatch significativo
-    }
+    final diff = (userLevel - jobLevel).abs();
+    if (diff == 0) return 100.0;
+    if (diff == 1) return 70.0;
+    return 30.0;
   }
 
-  /// Extrae nivel numérico de experiencia
-  static int _extractExperienceLevel(
-    String experience,
-    Map<String, int> levels,
-  ) {
-    final expLower = experience.toLowerCase();
-
-    for (var entry in levels.entries) {
-      if (expLower.contains(entry.key)) {
-        return entry.value;
-      }
-    }
-
-    return 2; // Default: mid-level
+  static int _extractLevel(String text, Map<String, int> levels) {
+    final t = text.toLowerCase();
+    if (t.contains('lead') || t.contains('principal')) return 4;
+    if (t.contains('senior') || t.contains('sr')) return 3;
+    if (t.contains('mid') || t.contains('semi')) return 2;
+    if (t.contains('junior') || t.contains('jr') || t.contains('entry'))
+      return 1;
+    return 2; // Mid por defecto
   }
 
-  /// Calcula relevancia por ubicación (retorna 0-100)
   static double _calculateLocationMatch(Job job, AppUser user) {
-    if (user.searchHistory.isEmpty) {
-      return 50.0; // Score neutral
+    if (user.searchHistory.isEmpty) return 50.0;
+    final loc = DataNormalizer.normalize(job.location);
+    for (var term in user.searchHistory) {
+      if (loc.contains(DataNormalizer.normalize(term))) return 100.0;
     }
-
-    final jobLocation = job.location.toLowerCase();
-
-    // Buscar en historial de búsquedas
-    for (var searchTerm in user.searchHistory) {
-      final searchLower = searchTerm.toLowerCase();
-
-      // Match parcial o completo
-      if (jobLocation.contains(searchLower) ||
-          searchLower.contains(jobLocation)) {
-        return 100.0; // Usuario ha buscado esta ubicación antes
-      }
-    }
-
-    // No hay match directo
     return 20.0;
   }
 
-  /// Calcula score basado en antigüedad del empleo (retorna 0-100)
   static double _calculateFreshnessScore(Job job) {
-    final daysOld = DateTime.now().difference(job.postedDate).inDays;
-
-    if (daysOld <= 3) {
-      return 100.0; // Muy reciente
-    } else if (daysOld <= 7) {
-      return 80.0; // Reciente
-    } else if (daysOld <= 14) {
-      return 60.0; // Moderado
-    } else if (daysOld <= 30) {
-      return 40.0; // Antiguo
-    } else {
-      return 20.0; // Muy antiguo
-    }
+    final days = DateTime.now().difference(job.postedDate).inDays;
+    if (days <= 3) return 100.0;
+    if (days <= 7) return 80.0;
+    if (days <= 14) return 60.0;
+    return 30.0;
   }
 
-  /// Calcula score basado en rango salarial (retorna 0-100)
   static double _calculateSalaryScore(Job job) {
-    // Si no hay datos de salario, retornar neutral
-    if (job.salaryMin == 0 && job.salaryMax == 0) {
+    return (job.salaryMin > 0 || job.salaryMax > 0) ? 100.0 : 50.0;
+  }
+
+  /// Genera explicación textual del match para la UI
+  static String getMatchExplanation(Job job, AppUser user) {
+    final score = calculateRelevanceScore(job, user);
+    if (score > 85) return '🔥 Match Perfecto para tu perfil';
+    if (score > 70) return '✨ Gran coincidencia de habilidades';
+    if (score > 50) return '👍 Buen match con tu experiencia';
+    return 'Explora este empleo';
+  }
+
+  // ========== MÉTODOS DE INFERENCIA ML EXPANDIDA ==========
+
+  static double _calculateMLScore(Job job, AppUser user) {
+    try {
+      // Inputs expandidos (8-10 features en el futuro, por ahora adaptamos el vector)
+      // Aseguramos que el input shape [1, 4] coincida con el modelo actual,
+      // pero mejoramos la calidad de lo que enviamos usando el normalizador.
+
+      final uSkillEnc = _encodeValue(
+        user.skills.isNotEmpty
+            ? DataNormalizer.normalize(user.skills.first)
+            : 'flutter',
+        'skills',
+      );
+      final jSkillEnc = _encodeValue(
+        job.requirements.isNotEmpty
+            ? DataNormalizer.normalize(job.requirements.first)
+            : 'flutter',
+        'skills',
+      );
+
+      final uLevelEnc = _encodeValue(user.experience.toLowerCase(), 'levels');
+      final jLevelEnc = _encodeValue(_extractJobLevel(job), 'levels');
+
+      var input = [
+        [
+          uSkillEnc.toDouble(),
+          uLevelEnc.toDouble(),
+          jSkillEnc.toDouble(),
+          jLevelEnc.toDouble(),
+        ],
+      ];
+
+      var output = List.filled(1, List.filled(1, 0.0)).reshape([1, 1]);
+      _interpreter!.run(input, output);
+
+      return (output[0][0] * 100).clamp(0.0, 100.0);
+    } catch (e) {
       return 50.0;
     }
-
-    // Premiar empleos con salarios definidos
-    if (job.salaryMin > 0 && job.salaryMax > 0) {
-      return 100.0; // Transparencia salarial es valiosa
-    }
-
-    return 70.0; // Salario parcialmente definido
   }
 
-  /// Genera explicación textual del match
-  static String getMatchExplanation(Job job, AppUser user) {
-    final skillsScore = _calculateSkillsMatch(job, user);
-    final expScore = _calculateExperienceMatch(job, user);
-    final locationScore = _calculateLocationMatch(job, user);
-
-    List<String> reasons = [];
-
-    if (skillsScore > 70) {
-      final matchedSkills = _getMatchedSkills(job, user);
-      reasons.add('Tus skills coinciden: ${matchedSkills.join(", ")}');
-    }
-
-    if (expScore > 70) {
-      reasons.add('Nivel de experiencia adecuado');
-    }
-
-    if (locationScore > 70) {
-      reasons.add('Ubicación de tu interés');
-    }
-
-    if (job.postedDate.difference(DateTime.now()).inDays.abs() <= 3) {
-      reasons.add('Publicado recientemente');
-    }
-
-    if (reasons.isEmpty) {
-      return 'Este empleo podría interesarte';
-    }
-
-    return reasons.join(' • ');
+  static int _encodeValue(String value, String type) {
+    if (_encoders == null) return 0;
+    final list = _encoders![type] as List;
+    final index = list.indexOf(value.toLowerCase());
+    return index != -1 ? index : 0;
   }
 
-  /// Obtiene lista de skills que coinciden
-  static List<String> _getMatchedSkills(Job job, AppUser user) {
-    List<String> matched = [];
-
-    for (var requirement in job.requirements) {
-      final reqLower = requirement.toLowerCase();
-
-      for (var skill in user.skills) {
-        final skillLower = skill.toLowerCase();
-
-        if (skillLower.contains(reqLower) || reqLower.contains(skillLower)) {
-          matched.add(skill);
-          break;
-        }
-      }
-    }
-
-    return matched.take(3).toList(); // Máximo 3 skills
+  static String _extractJobLevel(Job job) {
+    final text = '${job.title} ${job.description}'.toLowerCase();
+    if (text.contains('lead')) return 'lead';
+    if (text.contains('senior')) return 'senior';
+    if (text.contains('junior')) return 'junior';
+    return 'mid';
   }
 }

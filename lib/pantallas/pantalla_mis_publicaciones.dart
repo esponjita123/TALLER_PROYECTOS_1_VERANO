@@ -5,6 +5,7 @@ import '../modelos/modelo_empleo.dart';
 import '../servicios/servicio_imagen.dart';
 import 'pantalla_agregar_empleo.dart';
 import 'pantalla_detalle_empleo.dart';
+import 'pantalla_postulantes.dart';
 
 class MyPostsScreen extends StatelessWidget {
   const MyPostsScreen({super.key});
@@ -451,6 +452,91 @@ class MyPostsScreen extends StatelessWidget {
                                         style: TextStyle(
                                           color: Colors.grey.shade700,
                                         ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      const Divider(),
+                                      const SizedBox(height: 8),
+
+                                      // Applicant Count Badge & Action
+                                      StreamBuilder<QuerySnapshot>(
+                                        stream:
+                                            FirebaseFirestore.instance
+                                                .collection(
+                                                  'wanka_applications',
+                                                )
+                                                .where(
+                                                  'jobId',
+                                                  isEqualTo: job.id,
+                                                )
+                                                .snapshots(),
+                                        builder: (context, appSnapshot) {
+                                          final count =
+                                              appSnapshot.data?.docs.length ??
+                                              0;
+                                          return Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.people_outline,
+                                                    color:
+                                                        count > 0
+                                                            ? Colors.purple
+                                                            : Colors.grey,
+                                                    size: 20,
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    count == 1
+                                                        ? '1 postulante'
+                                                        : '$count postulantes',
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          count > 0
+                                                              ? FontWeight.bold
+                                                              : FontWeight
+                                                                  .normal,
+                                                      color:
+                                                          count > 0
+                                                              ? Colors.purple
+                                                              : Colors
+                                                                  .grey
+                                                                  .shade600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              TextButton.icon(
+                                                onPressed: () {
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder:
+                                                          (_) =>
+                                                              ApplicantsScreen(
+                                                                jobId: job.id,
+                                                              ),
+                                                    ),
+                                                  );
+                                                },
+                                                icon: const Icon(
+                                                  Icons
+                                                      .arrow_circle_right_outlined,
+                                                  size: 20,
+                                                ),
+                                                label: const Text(
+                                                  'Ver Candidatos',
+                                                ),
+                                                style: TextButton.styleFrom(
+                                                  foregroundColor:
+                                                      Colors.indigo.shade700,
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        },
                                       ),
                                     ],
                                   ),
