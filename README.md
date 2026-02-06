@@ -1,6 +1,6 @@
-# taller_proyectos_1 - WancaTrabajo
+# taller_proyectos_1 - WankaTrabajo
 
-WancaTrabajo es una aplicación móvil de intermediación laboral desarrollada en el marco del curso **Taller de Proyectos en Ingeniería de Sistemas e Informática**, cuyo propósito es mejorar el proceso de conexión entre personas que buscan empleo y usuarios que requieren personal para la realización de actividades laborales en la ciudad de Huancayo.
+WankaTrabajo es una aplicación móvil de intermediación laboral desarrollada en el marco del curso **Taller de Proyectos en Ingeniería de Sistemas e Informática**, cuyo propósito es mejorar el proceso de conexión entre personas que buscan empleo y usuarios que requieren personal para la realización de actividades laborales en la ciudad de Huancayo.
 
 La problemática abordada por la aplicación se centra en la limitada difusión digital de ofertas de empleo, especialmente en trabajos temporales, informales o de pequeña escala, los cuales suelen difundirse de manera verbal o a través de redes sociales sin una estructura adecuada. Esta situación genera una brecha entre la oferta y la demanda laboral, afectando tanto a los postulantes como a quienes requieren personal de forma inmediata.
 
