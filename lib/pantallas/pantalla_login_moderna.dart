@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../datos/globales.dart';
 import '../modelos/modelo_usuario.dart';
+import '../servicios/servicio_notificaciones.dart';
 import 'pantalla_inicio.dart';
 import 'pantalla_registro.dart';
 
@@ -68,6 +69,10 @@ class _ModernLoginScreenState extends State<ModernLoginScreen>
           // Guardar sesión - Persistencia
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('user_email', loggedUser!.email);
+
+          // Guardar token FCM para notificaciones push
+          await NotificationService.saveTokenToFirestore(loggedUser!.email);
+          NotificationService.listenToTokenRefresh(loggedUser!.email);
 
           if (mounted) {
             Navigator.pushReplacement(

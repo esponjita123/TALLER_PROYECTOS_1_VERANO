@@ -1,1 +1,48 @@
-{"skills": ["aws", "dart", "firebase", "flutter", "java", "javascript", "node", "other", "python", "react", "sql"], "levels": ["junior", "lead", "mid", "senior"]}
+{
+  "skills": [
+    "administración",
+    "albañilería",
+    "barbería",
+    "bartender",
+    "bordado",
+    "carpintería",
+    "cocina",
+    "conducción",
+    "contabilidad",
+    "costura",
+    "cuidado_personas",
+    "diseño",
+    "ebanistería",
+    "electricidad",
+    "general",
+    "jardinería",
+    "limpieza",
+    "marketing",
+    "mecánica",
+    "metalurgia",
+    "panadería",
+    "pastelería",
+    "peluquería",
+    "pintura",
+    "plomería",
+    "programación",
+    "sastrería",
+    "soldadura",
+    "tejido",
+    "ventas",
+    "vidriería"
+  ],
+  "levels": [
+    "avanzado",
+    "básico",
+    "experto",
+    "intermedio"
+  ],
+  "types": [
+    "medio-tiempo",
+    "por-obra",
+    "profesional",
+    "remoto",
+    "temporal"
+  ]
+}

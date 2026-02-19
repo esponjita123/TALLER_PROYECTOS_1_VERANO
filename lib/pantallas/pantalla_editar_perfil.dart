@@ -24,8 +24,37 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   final ImagePicker _picker = ImagePicker();
 
   List<String> _skills = [];
-  String _experience = 'Junior';
-  final List<String> _experienceLevels = ['Junior', 'Mid', 'Senior', 'Lead'];
+  String _experience = 'Básico';
+  final List<String> _experienceLevels = [
+    'Básico',
+    'Intermedio',
+    'Avanzado',
+    'Experto',
+  ];
+
+  // Sugerencias de oficios casuales/profesionales
+  final List<String> _suggestedSkills = [
+    'Costura',
+    'Carpintería',
+    'Soldadura',
+    'Electricidad',
+    'Cocina',
+    'Limpieza',
+    'Pintura',
+    'Albañilería',
+    'Mecánica',
+    'Jardinería',
+    'Plomería',
+    'Panadería',
+    'Peluquería',
+    'Conducción',
+    'Cuidado niños',
+    'Tejido',
+    'Repostería',
+    'Ganadería',
+    'Agricultura',
+    'Ventas',
+  ];
 
   bool _isLoading = false;
   late AnimationController _animationController;
@@ -49,10 +78,10 @@ class _EditProfileScreenState extends State<EditProfileScreen>
       bioCtrl.text = loggedUser!.bio;
       _skills = List.from(loggedUser!.skills);
       _experience =
-          loggedUser!.experience.isNotEmpty ? loggedUser!.experience : 'Junior';
+          loggedUser!.experience.isNotEmpty ? loggedUser!.experience : 'Básico';
 
       if (!_experienceLevels.contains(_experience)) {
-        _experience = 'Mid';
+        _experience = 'Básico';
       }
 
       if (loggedUser!.profileImagePath.isNotEmpty &&
@@ -129,21 +158,36 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   void _showSnackBar(String message, {required bool isError}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
         backgroundColor: isError ? Colors.red.shade600 : Colors.green.shade600,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final accent = isDark ? const Color(0xFFCE93D8) : Colors.purple.shade600;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Stack(
         children: [
-          // Background Gradient Deco
+          // Background decoration
           Positioned(
             top: -150,
             left: -100,
@@ -153,7 +197,27 @@ class _EditProfileScreenState extends State<EditProfileScreen>
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [Colors.purple.withOpacity(0.1), Colors.transparent],
+                  colors: [
+                    accent.withOpacity(isDark ? 0.08 : 0.1),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -80,
+            right: -40,
+            child: Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    cs.primary.withOpacity(isDark ? 0.05 : 0.08),
+                    Colors.transparent,
+                  ],
                 ),
               ),
             ),
@@ -162,7 +226,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
           SafeArea(
             child: Column(
               children: [
-                _buildHeader(context),
+                _buildHeader(context, cs, isDark),
                 Expanded(
                   child: FadeTransition(
                     opacity: _fadeAnimation,
@@ -173,41 +237,98 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                       ),
                       child: Column(
                         children: [
-                          _buildProfileImageSection(),
+                          _buildProfileImageSection(theme, cs, isDark, accent),
                           const SizedBox(height: 32),
-                          _buildSectionTitle('Información Personal'),
-                          const SizedBox(height: 16),
-                          _buildPremiumTextField(
-                            controller: nameCtrl,
-                            label: 'Nombre completo',
+
+                          // ── Información Personal ──
+                          _buildSectionCard(
+                            theme,
+                            cs,
+                            isDark,
+                            accent,
+                            title: 'Información Personal',
                             icon: Icons.person_outline_rounded,
+                            children: [
+                              _buildPremiumTextField(
+                                controller: nameCtrl,
+                                label: 'Nombre completo',
+                                icon: Icons.person_outline_rounded,
+                                theme: theme,
+                                cs: cs,
+                                isDark: isDark,
+                                accent: accent,
+                              ),
+                              const SizedBox(height: 14),
+                              _buildPremiumTextField(
+                                controller: phoneCtrl,
+                                label: 'Teléfono de contacto',
+                                icon: Icons.phone_android_rounded,
+                                keyboardType: TextInputType.phone,
+                                theme: theme,
+                                cs: cs,
+                                isDark: isDark,
+                                accent: accent,
+                              ),
+                              const SizedBox(height: 14),
+                              _buildPremiumTextField(
+                                controller: bioCtrl,
+                                label: 'Sobre mí / Experiencia laboral',
+                                icon: Icons.history_edu_rounded,
+                                maxLines: 3,
+                                hint:
+                                    'Describe tu experiencia y qué trabajos buscas...',
+                                theme: theme,
+                                cs: cs,
+                                isDark: isDark,
+                                accent: accent,
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 16),
-                          _buildPremiumTextField(
-                            controller: phoneCtrl,
-                            label: 'Teléfono de contacto',
-                            icon: Icons.phone_android_rounded,
-                            keyboardType: TextInputType.phone,
+
+                          // ── Oficios y Habilidades ──
+                          _buildSectionCard(
+                            theme,
+                            cs,
+                            isDark,
+                            accent,
+                            title: 'Oficios y Habilidades',
+                            icon: Icons.construction_rounded,
+                            children: [
+                              _buildSkillsInputSection(
+                                theme,
+                                cs,
+                                isDark,
+                                accent,
+                              ),
+                              const SizedBox(height: 14),
+                              _buildSuggestedSkills(theme, cs, isDark, accent),
+                              const SizedBox(height: 14),
+                              _buildSkillsChips(theme, cs, isDark, accent),
+                            ],
                           ),
                           const SizedBox(height: 16),
-                          _buildPremiumTextField(
-                            controller: bioCtrl,
-                            label: 'Sobre mí / Biografía',
-                            icon: Icons.history_edu_rounded,
-                            maxLines: 3,
+
+                          // ── Nivel de Habilidad ──
+                          _buildSectionCard(
+                            theme,
+                            cs,
+                            isDark,
+                            accent,
+                            title: 'Nivel de Habilidad',
+                            icon: Icons.trending_up_rounded,
+                            children: [
+                              _buildExperienceSelector(
+                                theme,
+                                cs,
+                                isDark,
+                                accent,
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 32),
-                          _buildSectionTitle('Habilidades e IA'),
-                          const SizedBox(height: 16),
-                          _buildSkillsInputSection(),
-                          const SizedBox(height: 16),
-                          _buildSkillsChips(),
-                          const SizedBox(height: 32),
-                          _buildSectionTitle('Nivel Profesional'),
-                          const SizedBox(height: 16),
-                          _buildExperienceSelector(),
-                          const SizedBox(height: 40),
-                          _buildSaveButton(),
+
+                          _buildSaveButton(theme, cs, isDark, accent),
                           const SizedBox(height: 20),
                         ],
                       ),
@@ -222,7 +343,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, ColorScheme cs, bool isDark) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
       child: Row(
@@ -231,17 +352,19 @@ class _EditProfileScreenState extends State<EditProfileScreen>
             onPressed: () => Navigator.pop(context),
             icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
             style: IconButton.styleFrom(
-              backgroundColor: Colors.grey.shade100,
-              foregroundColor: Colors.purple.shade700,
+              backgroundColor:
+                  isDark ? cs.surfaceContainerHighest : Colors.grey.shade100,
+              foregroundColor: cs.onSurface,
             ),
           ),
           const SizedBox(width: 16),
-          const Text(
+          Text(
             'Mi Perfil',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w900,
-              color: Color(0xFF2E3E5C),
+              color: cs.onSurface,
+              letterSpacing: -0.5,
             ),
           ),
         ],
@@ -249,7 +372,73 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     );
   }
 
-  Widget _buildProfileImageSection() {
+  Widget _buildSectionCard(
+    ThemeData theme,
+    ColorScheme cs,
+    bool isDark,
+    Color accent, {
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(22),
+        border:
+            isDark
+                ? Border.all(color: cs.outlineVariant.withOpacity(0.5))
+                : null,
+        boxShadow:
+            isDark
+                ? null
+                : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(isDark ? 0.15 : 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 18, color: accent),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                title.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: accent,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileImageSection(
+    ThemeData theme,
+    ColorScheme cs,
+    bool isDark,
+    Color accent,
+  ) {
     return Center(
       child: Stack(
         alignment: Alignment.bottomRight,
@@ -259,25 +448,31 @@ class _EditProfileScreenState extends State<EditProfileScreen>
             height: 130,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 4),
+              border: Border.all(
+                color: isDark ? cs.outlineVariant : Colors.white,
+                width: 4,
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.purple.withOpacity(0.2),
+                  color: accent.withOpacity(isDark ? 0.15 : 0.2),
                   blurRadius: 20,
                   offset: const Offset(0, 10),
                 ),
               ],
             ),
-            child: ClipOval(child: _buildProfileImage()),
+            child: ClipOval(child: _buildProfileImage(cs, isDark, accent)),
           ),
           GestureDetector(
             onTap: _pickImage,
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.purple.shade600,
+                color: accent,
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 3),
+                border: Border.all(
+                  color: theme.scaffoldBackgroundColor,
+                  width: 3,
+                ),
               ),
               child: const Icon(
                 Icons.camera_alt_rounded,
@@ -291,7 +486,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     );
   }
 
-  Widget _buildProfileImage() {
+  Widget _buildProfileImage(ColorScheme cs, bool isDark, Color accent) {
     if (_imageFile != null) {
       return Image.file(_imageFile!, fit: BoxFit.cover);
     } else if (_existingImageBase64 != null) {
@@ -301,63 +496,63 @@ class _EditProfileScreenState extends State<EditProfileScreen>
       );
     } else {
       return Container(
-        color: Colors.grey.shade100,
+        color: cs.surfaceContainerHighest,
         child: Icon(
           Icons.person_rounded,
           size: 60,
-          color: Colors.purple.shade200,
+          color: accent.withOpacity(0.4),
         ),
       );
     }
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(
-        title.toUpperCase(),
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w800,
-          color: Colors.purple.shade700,
-          letterSpacing: 1.2,
-        ),
-      ),
-    );
   }
 
   Widget _buildPremiumTextField({
     required TextEditingController controller,
     required String label,
     required IconData icon,
+    required ThemeData theme,
+    required ColorScheme cs,
+    required bool isDark,
+    required Color accent,
     int maxLines = 1,
+    String? hint,
     TextInputType? keyboardType,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey.shade100),
+        color: isDark ? cs.surfaceContainerHighest : const Color(0xFFF0F0F5),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: TextField(
         controller: controller,
         maxLines: maxLines,
         keyboardType: keyboardType,
-        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: cs.onSurface,
+        ),
         decoration: InputDecoration(
           labelText: label,
+          hintText: hint,
           labelStyle: TextStyle(
-            color: Colors.blueGrey.shade400,
+            color: cs.onSurface.withOpacity(0.5),
             fontWeight: FontWeight.w500,
           ),
-          prefixIcon: Icon(icon, color: Colors.purple.shade400, size: 22),
+          hintStyle: TextStyle(color: cs.onSurface.withOpacity(0.3)),
+          prefixIcon: Icon(icon, color: accent, size: 22),
           border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: accent, width: 1.5),
+          ),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
             vertical: 12,
           ),
           floatingLabelStyle: TextStyle(
-            color: Colors.purple.shade700,
+            color: accent,
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -365,55 +560,156 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     );
   }
 
-  Widget _buildSkillsInputSection() {
+  Widget _buildSkillsInputSection(
+    ThemeData theme,
+    ColorScheme cs,
+    bool isDark,
+    Color accent,
+  ) {
     return Row(
       children: [
         Expanded(
           child: _buildPremiumTextField(
             controller: skillInputCtrl,
-            label: 'Añadir habilidad (ej: Flutter)',
-            icon: Icons.auto_awesome_rounded,
+            label: 'Añadir oficio (ej: Costurero)',
+            icon: Icons.construction_rounded,
+            theme: theme,
+            cs: cs,
+            isDark: isDark,
+            accent: accent,
           ),
         ),
         const SizedBox(width: 12),
-        GestureDetector(
-          onTap: _addSkill,
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.purple.shade500, Colors.purple.shade800],
+        Material(
+          color: accent,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            onTap: _addSkill,
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              height: 52,
+              width: 52,
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.add_rounded,
+                color: Colors.white,
+                size: 26,
               ),
-              borderRadius: BorderRadius.circular(16),
             ),
-            child: const Icon(Icons.add_rounded, color: Colors.white),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildSkillsChips() {
+  Widget _buildSuggestedSkills(
+    ThemeData theme,
+    ColorScheme cs,
+    bool isDark,
+    Color accent,
+  ) {
+    // Filter out already-added skills
+    final available =
+        _suggestedSkills.where((s) => !_skills.contains(s)).toList();
+
+    if (available.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Sugerencias rápidas:',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: cs.onSurface.withOpacity(0.5),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children:
+              available.take(10).map((skill) {
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _skills.add(skill);
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: accent.withOpacity(isDark ? 0.08 : 0.06),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: accent.withOpacity(isDark ? 0.2 : 0.15),
+                        style: BorderStyle.solid,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.add,
+                          size: 14,
+                          color: accent.withOpacity(0.7),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          skill,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: accent,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSkillsChips(
+    ThemeData theme,
+    ColorScheme cs,
+    bool isDark,
+    Color accent,
+  ) {
     if (_skills.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.orange.shade50,
+          color:
+              isDark ? Colors.orange.withOpacity(0.1) : Colors.orange.shade50,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.orange.shade100),
+          border: Border.all(
+            color:
+                isDark
+                    ? Colors.orange.withOpacity(0.2)
+                    : Colors.orange.shade100,
+          ),
         ),
         child: Row(
           children: [
             Icon(
               Icons.lightbulb_outline_rounded,
-              color: Colors.orange.shade700,
+              color: isDark ? Colors.orange.shade300 : Colors.orange.shade700,
             ),
             const SizedBox(width: 12),
-            const Expanded(
+            Expanded(
               child: Text(
-                'Añade habilidades para que la IA te sugiera mejores empleos.',
+                'Añade tus oficios para encontrar empleos que se ajusten a tu experiencia.',
                 style: TextStyle(
-                  color: Colors.orange,
+                  color:
+                      isDark ? Colors.orange.shade300 : Colors.orange.shade700,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
@@ -432,17 +728,21 @@ class _EditProfileScreenState extends State<EditProfileScreen>
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.purple.shade50,
+                color: accent.withOpacity(isDark ? 0.12 : 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.purple.shade100),
+                border: Border.all(
+                  color: accent.withOpacity(isDark ? 0.2 : 0.15),
+                ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  Icon(Icons.check_circle, size: 14, color: accent),
+                  const SizedBox(width: 6),
                   Text(
                     skill,
                     style: TextStyle(
-                      color: Colors.purple.shade800,
+                      color: isDark ? accent : Colors.purple.shade800,
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
                     ),
@@ -453,7 +753,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                     child: Icon(
                       Icons.close_rounded,
                       size: 16,
-                      color: Colors.purple.shade600,
+                      color: accent.withOpacity(0.7),
                     ),
                   ),
                 ],
@@ -463,54 +763,123 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     );
   }
 
-  Widget _buildExperienceSelector() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey.shade100),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _experience,
-          isExpanded: true,
-          icon: Icon(
-            Icons.keyboard_arrow_down_rounded,
-            color: Colors.purple.shade700,
+  Widget _buildExperienceSelector(
+    ThemeData theme,
+    ColorScheme cs,
+    bool isDark,
+    Color accent,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '¿Qué tan experimentado te consideras?',
+          style: TextStyle(
+            fontSize: 13,
+            color: cs.onSurface.withOpacity(0.6),
+            fontWeight: FontWeight.w500,
           ),
-          style: const TextStyle(
-            color: Colors.black87,
-            fontWeight: FontWeight.w600,
-            fontSize: 15,
-          ),
-          items:
-              _experienceLevels.map((String value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(value),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children:
+              _experienceLevels.map((level) {
+                final isSelected = _experience == level;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _experience = level),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color:
+                            isSelected
+                                ? accent
+                                : (isDark
+                                    ? cs.surfaceContainerHighest
+                                    : const Color(0xFFF0F0F5)),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color:
+                              isSelected
+                                  ? accent
+                                  : (isDark
+                                      ? cs.outlineVariant
+                                      : Colors.grey.shade200),
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(
+                            _getLevelIcon(level),
+                            size: 22,
+                            color:
+                                isSelected
+                                    ? Colors.white
+                                    : cs.onSurface.withOpacity(0.5),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            level,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight:
+                                  isSelected
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                              color:
+                                  isSelected
+                                      ? Colors.white
+                                      : cs.onSurface.withOpacity(0.7),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 );
               }).toList(),
-          onChanged: (newValue) {
-            setState(() => _experience = newValue!);
-          },
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildSaveButton() {
+  IconData _getLevelIcon(String level) {
+    switch (level) {
+      case 'Básico':
+        return Icons.emoji_events_outlined;
+      case 'Intermedio':
+        return Icons.trending_up;
+      case 'Avanzado':
+        return Icons.star_half_rounded;
+      case 'Experto':
+        return Icons.workspace_premium;
+      default:
+        return Icons.circle_outlined;
+    }
+  }
+
+  Widget _buildSaveButton(
+    ThemeData theme,
+    ColorScheme cs,
+    bool isDark,
+    Color accent,
+  ) {
     return Container(
       width: double.infinity,
       height: 58,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.purple.shade600, Colors.purple.shade800],
+          colors:
+              isDark
+                  ? [accent.withOpacity(0.9), accent.withOpacity(0.7)]
+                  : [Colors.purple.shade600, Colors.purple.shade800],
         ),
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.purple.withOpacity(0.3),
+            color: accent.withOpacity(isDark ? 0.2 : 0.3),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -542,7 +911,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                       Icons.check_circle_outline_rounded,
                       color: Colors.white,
                     ),
-                    const SizedBox(width: 12),
+                    SizedBox(width: 12),
                     Text(
                       'GUARDAR PERFIL',
                       style: TextStyle(

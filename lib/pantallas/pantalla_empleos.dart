@@ -1,11 +1,13 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../datos/globales.dart';
 import '../modelos/modelo_empleo.dart';
 import '../servicios/servicio_imagen.dart';
 import '../servicios/servicio_recomendacion.dart';
+import '../servicios/servicio_paginacion.dart';
+import '../widgets/skeletons.dart';
 import 'pantalla_detalle_empleo.dart';
+import 'pantalla_filtros_avanzados.dart';
 
 class JobsScreen extends StatefulWidget {
   const JobsScreen({super.key});
@@ -15,12 +17,22 @@ class JobsScreen extends StatefulWidget {
 }
 
 class _JobsScreenState extends State<JobsScreen> with TickerProviderStateMixin {
+  final JobsPaginationService _paginationService = JobsPaginationService();
   List<Job> jobs = [];
-  List<Job> filteredJobs = [];
   bool isLoading = true;
+  bool isLoadingMore = false;
+  bool hasMore = true;
   String searchQuery = "";
-  String selectedFilter = "Todos";
+
+  // Filtros avanzados
+  String? selectedJobType;
+  double? minSalary;
+  double? maxSalary;
+  String? selectedLocation;
+  bool showRemoteOnly = false;
+
   late AnimationController _listAnimationController;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -29,66 +41,144 @@ class _JobsScreenState extends State<JobsScreen> with TickerProviderStateMixin {
       duration: const Duration(milliseconds: 1000),
       vsync: this,
     );
-    _loadJobs();
+    _loadFirstPage();
+    _scrollController.addListener(_onScroll);
   }
 
-  void _loadJobs() {
-    FirebaseFirestore.instance
-        .collection('wanka_jobs')
-        .orderBy('postedDate', descending: true)
-        .snapshots()
-        .listen((snapshot) {
-          if (mounted) {
-            setState(() {
-              jobs =
-                  snapshot.docs.map((doc) {
-                    final data = doc.data();
-                    data['id'] = doc.id;
-                    return Job.fromJson(data);
-                  }).toList();
-
-              if (loggedUser != null) {
-                jobs = RecommendationService.rankJobsByRelevance(
-                  jobs,
-                  loggedUser!,
-                );
-              }
-
-              _applyFilters();
-              isLoading = false;
-            });
-            _listAnimationController.reset();
-            _listAnimationController.forward();
-          }
-        });
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent * 0.8) {
+      _loadMoreJobs();
+    }
   }
 
-  void _applyFilters() {
-    filteredJobs =
-        jobs.where((job) {
-          final matchesSearch =
-              job.title.toLowerCase().contains(searchQuery.toLowerCase()) ||
-              job.company.toLowerCase().contains(searchQuery.toLowerCase());
+  Future<void> _loadFirstPage() async {
+    setState(() => isLoading = true);
 
-          if (selectedFilter == "Todos") return matchesSearch;
-          if (selectedFilter == "Remoto")
-            return matchesSearch &&
-                job.location.toLowerCase().contains("remoto");
-          if (selectedFilter == "Presencial")
-            return matchesSearch &&
-                !job.location.toLowerCase().contains("remoto");
+    final result = await _paginationService.loadFirstPage(
+      searchQuery: searchQuery.isEmpty ? null : searchQuery,
+      jobType: selectedJobType,
+      minSalary: minSalary,
+      maxSalary: maxSalary,
+      location: selectedLocation,
+    );
 
-          return matchesSearch;
-        }).toList();
+    if (mounted) {
+      setState(() {
+        jobs = result;
+        hasMore = _paginationService.hasMore;
+        isLoading = false;
+      });
+
+      if (loggedUser != null && jobs.isNotEmpty) {
+        jobs = RecommendationService.rankJobsByRelevance(jobs, loggedUser!);
+      }
+
+      _listAnimationController.reset();
+      _listAnimationController.forward();
+    }
+  }
+
+  Future<void> _loadMoreJobs() async {
+    if (isLoadingMore || !hasMore) return;
+
+    setState(() => isLoadingMore = true);
+
+    final result = await _paginationService.loadNextPage(
+      searchQuery: searchQuery.isEmpty ? null : searchQuery,
+      jobType: selectedJobType,
+      minSalary: minSalary,
+      maxSalary: maxSalary,
+      location: selectedLocation,
+    );
+
+    if (mounted) {
+      setState(() {
+        if (loggedUser != null && result.isNotEmpty) {
+          final rankedNewJobs = RecommendationService.rankJobsByRelevance(
+            result,
+            loggedUser!,
+          );
+          jobs.addAll(rankedNewJobs);
+        } else {
+          jobs.addAll(result);
+        }
+        hasMore = _paginationService.hasMore;
+        isLoadingMore = false;
+      });
+    }
+  }
+
+  void _onSearchChanged(String value) {
+    searchQuery = value;
+    _debounceLoad();
+  }
+
+  void _debounceLoad() {
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _loadFirstPage();
+    });
+  }
+
+  Future<void> _showAdvancedFilters() async {
+    final result = await Navigator.push<FilterResult>(
+      context,
+      MaterialPageRoute(
+        builder:
+            (_) => AdvancedFiltersScreen(
+              initialJobType: selectedJobType,
+              initialMinSalary: minSalary,
+              initialMaxSalary: maxSalary,
+              initialLocation: selectedLocation,
+              initialRemoteOnly: showRemoteOnly,
+            ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        selectedJobType = result.jobType;
+        minSalary = result.minSalary;
+        maxSalary = result.maxSalary;
+        selectedLocation = result.location;
+        showRemoteOnly = result.remoteOnly;
+      });
+      _loadFirstPage();
+    }
+  }
+
+  void _clearFilters() {
+    setState(() {
+      selectedJobType = null;
+      minSalary = null;
+      maxSalary = null;
+      selectedLocation = null;
+      showRemoteOnly = false;
+      searchQuery = '';
+    });
+    _loadFirstPage();
+  }
+
+  bool get hasActiveFilters {
+    return selectedJobType != null ||
+        minSalary != null ||
+        maxSalary != null ||
+        selectedLocation != null ||
+        showRemoteOnly ||
+        searchQuery.isNotEmpty;
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Stack(
         children: [
-          // Background Decor
+          // Background decoration
           Positioned(
             top: -100,
             right: -50,
@@ -98,34 +188,43 @@ class _JobsScreenState extends State<JobsScreen> with TickerProviderStateMixin {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [Colors.blue.withOpacity(0.15), Colors.transparent],
+                  colors: [
+                    cs.primary.withOpacity(isDark ? 0.08 : 0.12),
+                    Colors.transparent,
+                  ],
                 ),
               ),
             ),
           ),
-
+          Positioned(
+            bottom: -80,
+            left: -40,
+            child: Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    cs.secondary.withOpacity(isDark ? 0.05 : 0.08),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
           SafeArea(
             child: Column(
               children: [
-                _buildModernHeader(),
-                _buildFilterChips(),
-
+                _buildModernHeader(theme, cs, isDark),
+                _buildFilterChips(theme, cs, isDark),
                 Expanded(
                   child:
                       isLoading
-                          ? const Center(child: CircularProgressIndicator())
-                          : filteredJobs.isEmpty
-                          ? _buildEmptyState()
-                          : ListView.builder(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 10,
-                            ),
-                            itemCount: filteredJobs.length,
-                            itemBuilder:
-                                (context, index) =>
-                                    _buildJobCard(filteredJobs[index], index),
-                          ),
+                          ? const JobsListSkeleton()
+                          : jobs.isEmpty
+                          ? _buildEmptyState(theme, cs)
+                          : _buildJobsList(theme),
                 ),
               ],
             ),
@@ -135,7 +234,7 @@ class _JobsScreenState extends State<JobsScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildModernHeader() {
+  Widget _buildModernHeader(ThemeData theme, ColorScheme cs, bool isDark) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
       child: Column(
@@ -147,56 +246,100 @@ class _JobsScreenState extends State<JobsScreen> with TickerProviderStateMixin {
                 onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
                 style: IconButton.styleFrom(
-                  backgroundColor: Colors.grey.shade100,
-                  foregroundColor: Colors.blueGrey.shade800,
+                  backgroundColor:
+                      isDark
+                          ? cs.surfaceContainerHighest
+                          : Colors.grey.shade100,
+                  foregroundColor: cs.onSurface,
                 ),
               ),
               const SizedBox(width: 16),
-              Text(
-                'Empleos',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.blueGrey.shade900,
-                  letterSpacing: -0.5,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          // Search Bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100.withOpacity(0.8),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withOpacity(0.5)),
-                ),
-                child: TextField(
-                  onChanged: (value) {
-                    setState(() {
-                      searchQuery = value;
-                      _applyFilters();
-                    });
-                  },
-                  decoration: InputDecoration(
-                    hintText: 'Buscar cargo o empresa...',
-                    hintStyle: TextStyle(
-                      color: Colors.blueGrey.shade300,
-                      fontSize: 14,
-                    ),
-                    border: InputBorder.none,
-                    icon: Icon(
-                      Icons.search_rounded,
-                      color: Colors.blue.shade400,
-                    ),
+              Expanded(
+                child: Text(
+                  'Empleos',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    color: cs.onSurface,
+                    letterSpacing: -0.5,
                   ),
                 ),
               ),
+              if (hasActiveFilters)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: cs.primaryContainer,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.filter_list,
+                        size: 16,
+                        color: cs.onPrimaryContainer,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Activos',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onPrimaryContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Search bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color:
+                  isDark
+                      ? cs.surfaceContainerHighest
+                      : Colors.grey.shade100.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isDark ? cs.outlineVariant : Colors.grey.shade200,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.search_rounded, color: cs.primary.withOpacity(0.7)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    onChanged: _onSearchChanged,
+                    style: TextStyle(color: cs.onSurface),
+                    decoration: InputDecoration(
+                      hintText: 'Buscar cargo, empresa o palabra clave...',
+                      hintStyle: TextStyle(
+                        color: cs.onSurface.withOpacity(0.4),
+                        fontSize: 14,
+                      ),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      filled: false,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: _showAdvancedFilters,
+                  icon: Icon(
+                    Icons.tune_rounded,
+                    color: cs.primary.withOpacity(0.7),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -204,81 +347,236 @@ class _JobsScreenState extends State<JobsScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildFilterChips() {
-    final filters = ["Todos", "Remoto", "Presencial"];
+  Widget _buildFilterChips(ThemeData theme, ColorScheme cs, bool isDark) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Row(
-        children:
-            filters.map((filter) {
-              final isSelected = selectedFilter == filter;
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: FilterChip(
-                  label: Text(filter),
-                  labelStyle: TextStyle(
-                    color: isSelected ? Colors.white : Colors.blueGrey.shade600,
-                    fontWeight:
-                        isSelected ? FontWeight.bold : FontWeight.normal,
-                    fontSize: 13,
-                  ),
-                  selected: isSelected,
-                  onSelected: (selected) {
-                    setState(() {
-                      selectedFilter = filter;
-                      _applyFilters();
-                    });
-                  },
-                  backgroundColor: Colors.grey.shade100,
-                  selectedColor: Colors.blue.shade600,
-                  checkmarkColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  side: BorderSide.none,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 2,
-                  ),
+        children: [
+          if (hasActiveFilters)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ActionChip(
+                label: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.clear,
+                      size: 16,
+                      color: isDark ? Colors.red.shade300 : Colors.red.shade700,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Limpiar',
+                      style: TextStyle(
+                        color:
+                            isDark ? Colors.red.shade300 : Colors.red.shade700,
+                      ),
+                    ),
+                  ],
                 ),
-              );
-            }).toList(),
+                onPressed: _clearFilters,
+                backgroundColor:
+                    isDark ? Colors.red.withOpacity(0.15) : Colors.red.shade50,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide.none,
+                ),
+              ),
+            ),
+          if (selectedJobType != null)
+            _buildFilterChip(
+              selectedJobType!,
+              cs,
+              isDark,
+              () => setState(() {
+                selectedJobType = null;
+                _loadFirstPage();
+              }),
+            ),
+          if (minSalary != null || maxSalary != null)
+            _buildFilterChip(
+              'S/${minSalary?.toInt() ?? 0} - S/${maxSalary?.toInt() ?? '∞'}',
+              cs,
+              isDark,
+              () => setState(() {
+                minSalary = null;
+                maxSalary = null;
+                _loadFirstPage();
+              }),
+            ),
+          if (selectedLocation != null)
+            _buildFilterChip(
+              selectedLocation!,
+              cs,
+              isDark,
+              () => setState(() {
+                selectedLocation = null;
+                _loadFirstPage();
+              }),
+            ),
+          if (showRemoteOnly)
+            _buildFilterChip(
+              'Remoto',
+              cs,
+              isDark,
+              () => setState(() {
+                showRemoteOnly = false;
+                _loadFirstPage();
+              }),
+            ),
+          if (!hasActiveFilters)
+            FilterChip(
+              label: Text(
+                'Todos los empleos',
+                style: TextStyle(
+                  color: isDark ? cs.onPrimary : Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              selected: true,
+              onSelected: (_) {},
+              selectedColor: cs.primary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              side: BorderSide.none,
+              showCheckmark: false,
+            ),
+        ],
       ),
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildFilterChip(
+    String label,
+    ColorScheme cs,
+    bool isDark,
+    VoidCallback onRemove,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Chip(
+        label: Text(
+          label,
+          style: TextStyle(color: cs.onPrimaryContainer, fontSize: 13),
+        ),
+        deleteIcon: Icon(Icons.close, size: 16, color: cs.onPrimaryContainer),
+        onDeleted: onRemove,
+        backgroundColor: cs.primaryContainer,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        side: BorderSide.none,
+      ),
+    );
+  }
+
+  Widget _buildJobsList(ThemeData theme) {
+    return RefreshIndicator(
+      onRefresh: _loadFirstPage,
+      color: theme.colorScheme.primary,
+      child: ListView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        itemCount: jobs.length + (hasMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == jobs.length) {
+            return _buildLoadingIndicator(theme);
+          }
+          return _buildJobCard(jobs[index], index, theme);
+        },
+      ),
+    );
+  }
+
+  Widget _buildLoadingIndicator(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      alignment: Alignment.center,
+      child: Column(
+        children: [
+          const SizedBox(height: 8),
+          SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                theme.colorScheme.primary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Cargando más empleos...',
+            style: TextStyle(
+              fontSize: 12,
+              color: theme.colorScheme.onSurface.withOpacity(0.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(ThemeData theme, ColorScheme cs) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.search_off_rounded, size: 80, color: Colors.grey.shade200),
+          Icon(
+            Icons.search_off_rounded,
+            size: 80,
+            color: cs.onSurface.withOpacity(0.15),
+          ),
           const SizedBox(height: 20),
           Text(
             'No encontramos resultados',
             style: TextStyle(
               fontSize: 18,
-              color: Colors.blueGrey.shade400,
+              color: cs.onSurface.withOpacity(0.6),
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Intenta con otros términos o filtros',
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade400),
+            'Intenta ajustar los filtros o términos de búsqueda',
+            style: TextStyle(
+              fontSize: 14,
+              color: cs.onSurface.withOpacity(0.4),
+            ),
           ),
+          if (hasActiveFilters) ...[
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: _clearFilters,
+              icon: const Icon(Icons.clear),
+              label: const Text('Limpiar filtros'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: cs.primary,
+                foregroundColor: cs.onPrimary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildJobCard(Job job, int index) {
+  Widget _buildJobCard(Job job, int index, ThemeData theme) {
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final isMyJob = job.employerEmail == loggedUser?.email;
     final animation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _listAnimationController,
-        curve: Interval(index * 0.1, 1.0, curve: Curves.easeOutCubic),
+        curve: Interval((index % 10) * 0.05, 1.0, curve: Curves.easeOutCubic),
       ),
     );
 
@@ -294,20 +592,27 @@ class _JobsScreenState extends State<JobsScreen> with TickerProviderStateMixin {
         );
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
+        margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          color: theme.cardColor,
+          borderRadius: BorderRadius.circular(22),
+          border:
+              isDark
+                  ? Border.all(color: cs.outlineVariant.withOpacity(0.5))
+                  : null,
+          boxShadow:
+              isDark
+                  ? null
+                  : [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(22),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
@@ -325,19 +630,18 @@ class _JobsScreenState extends State<JobsScreen> with TickerProviderStateMixin {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Company Icon/Image Placeholder
                         Container(
-                          width: 50,
-                          height: 50,
+                          width: 48,
+                          height: 48,
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade50,
-                            borderRadius: BorderRadius.circular(15),
+                            color: cs.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(14),
                           ),
                           child:
                               job.imagePath.isNotEmpty &&
                                       ImageService.isBase64(job.imagePath)
                                   ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(15),
+                                    borderRadius: BorderRadius.circular(14),
                                     child: Image.memory(
                                       ImageService.base64ToImage(job.imagePath),
                                       fit: BoxFit.cover,
@@ -345,28 +649,28 @@ class _JobsScreenState extends State<JobsScreen> with TickerProviderStateMixin {
                                   )
                                   : Icon(
                                     Icons.business_rounded,
-                                    color: Colors.blue.shade300,
+                                    color: cs.primary.withOpacity(0.6),
                                   ),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 14),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 job.title,
-                                style: const TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1A237E),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: cs.onSurface,
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 3),
                               Text(
                                 job.company,
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: Colors.blueGrey.shade400,
+                                  color: cs.onSurface.withOpacity(0.5),
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -374,26 +678,41 @@ class _JobsScreenState extends State<JobsScreen> with TickerProviderStateMixin {
                           ),
                         ),
                         if (isMyJob)
-                          _buildMyJobBadge()
+                          _buildMyJobBadge(isDark)
                         else if (job.matchScore > 75)
                           _buildMatchBadge(job.matchScore),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    Row(
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
                         _infoChip(
                           Icons.location_on_outlined,
                           job.location,
-                          Colors.red.shade400,
+                          isDark
+                              ? const Color(0xFFEF9A9A)
+                              : Colors.red.shade400,
+                          isDark,
                         ),
-                        const SizedBox(width: 12),
                         if (job.salaryMax > 0)
                           _infoChip(
                             Icons.payments_outlined,
-                            'S/ ${job.salaryMax.toInt()}',
-                            Colors.green.shade500,
+                            'S/ ${job.salaryMin.toInt()} - ${job.salaryMax.toInt()}',
+                            isDark
+                                ? const Color(0xFFA5D6A7)
+                                : Colors.green.shade500,
+                            isDark,
                           ),
+                        _infoChip(
+                          Icons.work_outline,
+                          job.jobType,
+                          isDark
+                              ? const Color(0xFF90CAF9)
+                              : Colors.blue.shade500,
+                          isDark,
+                        ),
                       ],
                     ),
                   ],
@@ -406,11 +725,11 @@ class _JobsScreenState extends State<JobsScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _infoChip(IconData icon, String label, Color color) {
+  Widget _infoChip(IconData icon, String label, Color color, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
+        color: color.withOpacity(isDark ? 0.12 : 0.08),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -422,7 +741,7 @@ class _JobsScreenState extends State<JobsScreen> with TickerProviderStateMixin {
             label,
             style: TextStyle(
               fontSize: 12,
-              color: color.withOpacity(0.8),
+              color: color,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -431,17 +750,17 @@ class _JobsScreenState extends State<JobsScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildMyJobBadge() {
+  Widget _buildMyJobBadge(bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.green.shade50,
+        color: isDark ? Colors.green.withOpacity(0.15) : Colors.green.shade50,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         'TUYO',
         style: TextStyle(
-          color: Colors.green.shade700,
+          color: isDark ? const Color(0xFF81C784) : Colors.green.shade700,
           fontSize: 10,
           fontWeight: FontWeight.w900,
         ),
@@ -479,6 +798,23 @@ class _JobsScreenState extends State<JobsScreen> with TickerProviderStateMixin {
   @override
   void dispose() {
     _listAnimationController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
+}
+
+class FilterResult {
+  final String? jobType;
+  final double? minSalary;
+  final double? maxSalary;
+  final String? location;
+  final bool remoteOnly;
+
+  FilterResult({
+    this.jobType,
+    this.minSalary,
+    this.maxSalary,
+    this.location,
+    this.remoteOnly = false,
+  });
 }

@@ -6,8 +6,10 @@ class AppUser {
   String phone;
   String bio;
   List<String> skills;
-  String experience; // Para postulantes: Junior, Mid, Senior
+  String
+  experience; // Nivel de habilidad: Básico, Intermedio, Avanzado, Experto
   String profileImagePath;
+  String location; // Ubicación del usuario (ej. "Huancayo")
   List<String> searchHistory;
 
   AppUser({
@@ -20,6 +22,7 @@ class AppUser {
     List<String>? skills,
     this.experience = '',
     this.profileImagePath = '',
+    this.location = '',
     List<String>? searchHistory,
   }) : skills = skills ?? [],
        searchHistory = searchHistory ?? [];
@@ -36,6 +39,7 @@ class AppUser {
       'skills': skills,
       'experience': experience,
       'profileImagePath': profileImagePath,
+      'location': location,
       'searchHistory': searchHistory,
     };
   }
@@ -51,6 +55,7 @@ class AppUser {
       skills: List<String>.from(json['skills'] ?? []),
       experience: json['experience'] ?? '',
       profileImagePath: json['profileImagePath'] ?? '',
+      location: json['location'] ?? '',
       searchHistory: List<String>.from(json['searchHistory'] ?? []),
     );
   }

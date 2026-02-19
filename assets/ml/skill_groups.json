@@ -1,0 +1,44 @@
+{
+  "construcción": [
+    "albañilería",
+    "carpintería",
+    "ebanistería",
+    "pintura",
+    "electricidad",
+    "plomería",
+    "soldadura",
+    "metalurgia",
+    "vidriería"
+  ],
+  "textil": [
+    "costura",
+    "sastrería",
+    "bordado",
+    "tejido"
+  ],
+  "alimentos": [
+    "cocina",
+    "panadería",
+    "pastelería",
+    "bartender"
+  ],
+  "belleza": [
+    "peluquería",
+    "barbería"
+  ],
+  "profesional": [
+    "contabilidad",
+    "ventas",
+    "administración",
+    "diseño",
+    "programación",
+    "marketing"
+  ],
+  "servicios": [
+    "limpieza",
+    "jardinería",
+    "conducción",
+    "mecánica",
+    "cuidado_personas"
+  ]
+}

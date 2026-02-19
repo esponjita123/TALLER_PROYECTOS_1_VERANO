@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../modelos/modelo_usuario.dart';
 import '../datos/globales.dart';
+import '../servicios/servicio_notificaciones.dart';
 import 'pantalla_inicio.dart';
 import 'pantalla_login_moderna.dart';
 
@@ -38,6 +39,11 @@ class _SplashScreenState extends State<SplashScreen> {
 
         if (doc.exists && mounted) {
           loggedUser = AppUser.fromJson(doc.data()!);
+          
+          // Guardar token FCM para notificaciones push
+          await NotificationService.saveTokenToFirestore(loggedUser!.email);
+          NotificationService.listenToTokenRefresh(loggedUser!.email);
+          
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const HomeScreen()),

@@ -3,8 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../datos/globales.dart';
 import '../modelos/modelo_usuario.dart';
 import '../modelos/modelo_empleo.dart';
+import '../modelos/modelo_chat.dart';
 import '../servicios/servicio_imagen.dart';
 import '../servicios/servicio_recomendacion.dart';
+import '../servicios/servicio_chat.dart';
+import 'pantalla_chat_detalle.dart';
 
 class ApplicantsScreen extends StatefulWidget {
   final String? jobId;
@@ -233,7 +236,7 @@ class _ApplicantsScreenState extends State<ApplicantsScreen> {
                 _buildDetailsCard(data, status, statusColor, score),
                 if (status == 'Enviado') ...[
                   const SizedBox(height: 12),
-                  _buildActions(docId),
+                  _buildActions(docId, data),
                 ],
               ],
             ),
@@ -383,7 +386,7 @@ class _ApplicantsScreenState extends State<ApplicantsScreen> {
     );
   }
 
-  Widget _buildActions(String docId) {
+  Widget _buildActions(String docId, Map<String, dynamic> data) {
     return Row(
       children: [
         _circleBtn(
@@ -398,6 +401,12 @@ class _ApplicantsScreenState extends State<ApplicantsScreen> {
           () => _updateStatus(context, docId, 'Aceptado'),
         ),
         const SizedBox(width: 12),
+        _circleBtn(
+          Icons.chat_bubble_outline_rounded,
+          Colors.blue,
+          () => _startChat(context, data),
+        ),
+        const SizedBox(width: 12),
         const Text(
           '¿Aceptar candidato?',
           style: TextStyle(
@@ -408,6 +417,48 @@ class _ApplicantsScreenState extends State<ApplicantsScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _startChat(BuildContext context, Map<String, dynamic> data) async {
+    try {
+      final jobId = data['jobId'];
+      final jobTitle = data['jobTitle'];
+      final applicantEmail = data['applicantEmail'];
+      final applicantName = data['applicantName'];
+      final employerEmail = data['employerEmail'];
+      
+      // Obtener nombre del empleador
+      final employerDoc = await FirebaseFirestore.instance
+          .collection('wanka_users')
+          .doc(employerEmail)
+          .get();
+      String employerName = 'Empleador';
+      if (employerDoc.exists) {
+        employerName = employerDoc.data()?['name'] ?? 'Empleador';
+      }
+
+      final conversation = await ChatService.createOrGetConversation(
+        jobId: jobId,
+        jobTitle: jobTitle,
+        employerEmail: employerEmail,
+        employerName: employerName,
+        applicantEmail: applicantEmail,
+        applicantName: applicantName,
+      );
+
+      if (context.mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChatDetailScreen(conversation: conversation),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        _showSnackBar('Error al iniciar chat: $e', isError: true);
+      }
+    }
   }
 
   Widget _circleBtn(IconData icon, Color color, VoidCallback onTap) {

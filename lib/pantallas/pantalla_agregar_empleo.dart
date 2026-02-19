@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../datos/globales.dart';
 import '../modelos/modelo_empleo.dart';
 import '../servicios/servicio_imagen.dart';
+import 'pantalla_selector_ubicacion.dart';
 
 class AddJobScreen extends StatefulWidget {
   final Job? jobToEdit;
@@ -23,22 +24,24 @@ class _AddJobScreenState extends State<AddJobScreen>
   final phoneCtrl = TextEditingController();
   final salaryMinCtrl = TextEditingController();
   final salaryMaxCtrl = TextEditingController();
-  final requirementCtrl = TextEditingController(); // Nuevo controller
+  final requirementCtrl = TextEditingController();
 
   File? _imageFile;
   String? _existingImageBase64;
   final ImagePicker _picker = ImagePicker();
 
-  // Nuevos campos para ML
   List<String> _requirements = [];
-  String _jobType = 'full-time';
+  String _jobType = 'profesional';
   final List<String> _jobTypes = [
-    'full-time',
-    'part-time',
-    'remote',
-    'contract',
-    'freelance',
+    'profesional',
+    'temporal',
+    'medio-tiempo',
+    'por-obra',
+    'remoto',
   ];
+
+  double? _selectedLat;
+  double? _selectedLng;
 
   bool isLoading = false;
   bool isEditing = false;
@@ -75,7 +78,6 @@ class _AddJobScreenState extends State<AddJobScreen>
         _existingImageBase64 = job.imagePath;
       }
 
-      // Cargar requirements y jobType
       _requirements = List.from(job.requirements);
       if (_jobTypes.contains(job.jobType)) {
         _jobType = job.jobType;
@@ -128,8 +130,10 @@ class _AddJobScreenState extends State<AddJobScreen>
         'salaryMin': double.tryParse(salaryMinCtrl.text) ?? 0,
         'salaryMax': double.tryParse(salaryMaxCtrl.text) ?? 0,
         'imagePath': imageBase64,
-        'requirements': _requirements, // Guardar requirements para ML
-        'jobType': _jobType, // Guardar tipo de trabajo
+        'requirements': _requirements,
+        'jobType': _jobType,
+        if (_selectedLat != null) 'lat': _selectedLat,
+        if (_selectedLng != null) 'lng': _selectedLng,
       };
 
       if (isEditing) {
@@ -138,11 +142,8 @@ class _AddJobScreenState extends State<AddJobScreen>
             .doc(widget.jobToEdit!.id)
             .update(jobData);
       } else {
-        // jobData['requirements'] ya está incluido arriba
-        // jobData['jobType'] ya está incluido arriba
         jobData['applicants'] = [];
         jobData['postedDate'] = DateTime.now().toIso8601String();
-
         await FirebaseFirestore.instance.collection('wanka_jobs').add(jobData);
       }
 
@@ -183,8 +184,17 @@ class _AddJobScreenState extends State<AddJobScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Accent color for this screen (green-based)
+    final accent = isDark ? const Color(0xFF66BB6A) : Colors.green.shade600;
+    final accentLight =
+        isDark ? const Color(0xFF66BB6A) : Colors.green.shade400;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Stack(
         children: [
           // Background Decor
@@ -197,7 +207,27 @@ class _AddJobScreenState extends State<AddJobScreen>
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [Colors.green.withOpacity(0.15), Colors.transparent],
+                  colors: [
+                    accent.withOpacity(isDark ? 0.08 : 0.12),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -60,
+            left: -60,
+            child: Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    cs.secondary.withOpacity(isDark ? 0.05 : 0.06),
+                    Colors.transparent,
+                  ],
                 ),
               ),
             ),
@@ -206,7 +236,7 @@ class _AddJobScreenState extends State<AddJobScreen>
           SafeArea(
             child: Column(
               children: [
-                _buildModernHeader(),
+                _buildModernHeader(theme, cs, isDark),
                 Expanded(
                   child: FadeTransition(
                     opacity: _fadeAnimation,
@@ -220,86 +250,153 @@ class _AddJobScreenState extends State<AddJobScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _buildImageSection(),
-                            const SizedBox(height: 32),
+                            _buildImageSection(theme, cs, isDark, accent),
+                            const SizedBox(height: 28),
 
-                            _buildSectionTitle(
-                              'Información Básica',
-                              Icons.info_outline,
-                            ),
-                            _buildPremiumTextField(
-                              controller: titleCtrl,
-                              label: 'Título del puesto',
-                              icon: Icons.work_outline,
-                              hint: 'Ej: Desarrollador Flutter Senior',
-                            ),
-                            const SizedBox(height: 16),
-                            _buildPremiumTextField(
-                              controller: descCtrl,
-                              label: 'Descripción del empleo',
-                              icon: Icons.description_outlined,
-                              maxLines: 4,
-                              hint: 'Describe las responsabilidades...',
-                            ),
-
-                            const SizedBox(height: 32),
-                            _buildSectionTitle(
-                              'Detalles del Empleo',
-                              Icons.list_alt_outlined,
-                            ),
-                            _buildJobTypeDropdown(),
-                            const SizedBox(height: 16),
-                            _buildPremiumTextField(
-                              controller: locationCtrl,
-                              label: 'Ubicación',
-                              icon: Icons.location_on_outlined,
-                              hint: 'Ciudad o "Remoto"',
-                            ),
-                            const SizedBox(height: 16),
-                            _buildPremiumTextField(
-                              controller: phoneCtrl,
-                              label: 'Teléfono de contacto',
-                              icon: Icons.phone_outlined,
-                              keyboardType: TextInputType.phone,
-                            ),
-
-                            const SizedBox(height: 32),
-                            _buildSectionTitle(
-                              'Matching & Requisitos',
-                              Icons.auto_awesome_outlined,
-                            ),
-                            _buildRequirementsInput(),
-                            _buildRequirementsChips(),
-
-                            const SizedBox(height: 32),
-                            _buildSectionTitle(
-                              'Remuneración',
-                              Icons.payments_outlined,
-                            ),
-                            Row(
+                            // ── Información Básica ──
+                            _buildSectionCard(
+                              theme,
+                              cs,
+                              isDark,
+                              accent,
+                              title: 'Información Básica',
+                              icon: Icons.info_outline_rounded,
                               children: [
-                                Expanded(
-                                  child: _buildPremiumTextField(
-                                    controller: salaryMinCtrl,
-                                    label: 'Mínimo (S/)',
-                                    icon: Icons.remove_circle_outline,
-                                    keyboardType: TextInputType.number,
-                                  ),
+                                _buildPremiumTextField(
+                                  controller: titleCtrl,
+                                  label: 'Título del puesto',
+                                  icon: Icons.work_outline_rounded,
+                                  hint: 'Ej: Desarrollador Flutter Senior',
+                                  theme: theme,
+                                  cs: cs,
+                                  isDark: isDark,
+                                  accent: accentLight,
                                 ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: _buildPremiumTextField(
-                                    controller: salaryMaxCtrl,
-                                    label: 'Máximo (S/)',
-                                    icon: Icons.add_circle_outline,
-                                    keyboardType: TextInputType.number,
+                                const SizedBox(height: 14),
+                                _buildPremiumTextField(
+                                  controller: descCtrl,
+                                  label: 'Descripción del empleo',
+                                  icon: Icons.description_outlined,
+                                  maxLines: 4,
+                                  hint: 'Describe las responsabilidades...',
+                                  theme: theme,
+                                  cs: cs,
+                                  isDark: isDark,
+                                  accent: accentLight,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // ── Detalles del Empleo ──
+                            _buildSectionCard(
+                              theme,
+                              cs,
+                              isDark,
+                              accent,
+                              title: 'Detalles del Empleo',
+                              icon: Icons.list_alt_rounded,
+                              children: [
+                                _buildJobTypeDropdown(
+                                  theme,
+                                  cs,
+                                  isDark,
+                                  accentLight,
+                                ),
+                                const SizedBox(height: 14),
+                                _buildLocationPicker(
+                                  theme,
+                                  cs,
+                                  isDark,
+                                  accentLight,
+                                ),
+                                const SizedBox(height: 14),
+                                _buildPremiumTextField(
+                                  controller: phoneCtrl,
+                                  label: 'Teléfono de contacto',
+                                  icon: Icons.phone_outlined,
+                                  keyboardType: TextInputType.phone,
+                                  theme: theme,
+                                  cs: cs,
+                                  isDark: isDark,
+                                  accent: accentLight,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // ── Matching & Requisitos ──
+                            _buildSectionCard(
+                              theme,
+                              cs,
+                              isDark,
+                              accent,
+                              title: 'Matching & Requisitos',
+                              icon: Icons.auto_awesome_outlined,
+                              children: [
+                                _buildRequirementsInput(
+                                  theme,
+                                  cs,
+                                  isDark,
+                                  accent,
+                                  accentLight,
+                                ),
+                                if (_requirements.isNotEmpty) ...[
+                                  const SizedBox(height: 12),
+                                  _buildRequirementsChips(
+                                    theme,
+                                    cs,
+                                    isDark,
+                                    accent,
                                   ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // ── Remuneración ──
+                            _buildSectionCard(
+                              theme,
+                              cs,
+                              isDark,
+                              accent,
+                              title: 'Remuneración',
+                              icon: Icons.payments_outlined,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildPremiumTextField(
+                                        controller: salaryMinCtrl,
+                                        label: 'Mínimo (S/)',
+                                        icon: Icons.remove_circle_outline,
+                                        keyboardType: TextInputType.number,
+                                        theme: theme,
+                                        cs: cs,
+                                        isDark: isDark,
+                                        accent: accentLight,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: _buildPremiumTextField(
+                                        controller: salaryMaxCtrl,
+                                        label: 'Máximo (S/)',
+                                        icon: Icons.add_circle_outline,
+                                        keyboardType: TextInputType.number,
+                                        theme: theme,
+                                        cs: cs,
+                                        isDark: isDark,
+                                        accent: accentLight,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
 
-                            const SizedBox(height: 48),
-                            _buildSubmitButton(),
+                            const SizedBox(height: 32),
+                            _buildSubmitButton(theme, cs, isDark, accent),
                             const SizedBox(height: 16),
                           ],
                         ),
@@ -315,17 +412,18 @@ class _AddJobScreenState extends State<AddJobScreen>
     );
   }
 
-  Widget _buildModernHeader() {
+  Widget _buildModernHeader(ThemeData theme, ColorScheme cs, bool isDark) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
       child: Row(
         children: [
           IconButton(
             onPressed: () => Navigator.pop(context),
             icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
             style: IconButton.styleFrom(
-              backgroundColor: Colors.grey.shade100,
-              foregroundColor: Colors.blueGrey.shade800,
+              backgroundColor:
+                  isDark ? cs.surfaceContainerHighest : Colors.grey.shade100,
+              foregroundColor: cs.onSurface,
             ),
           ),
           const SizedBox(width: 16),
@@ -334,7 +432,7 @@ class _AddJobScreenState extends State<AddJobScreen>
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w900,
-              color: Colors.blueGrey.shade900,
+              color: cs.onSurface,
               letterSpacing: -0.5,
             ),
           ),
@@ -343,47 +441,98 @@ class _AddJobScreenState extends State<AddJobScreen>
     );
   }
 
-  Widget _buildSectionTitle(String title, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
+  Widget _buildSectionCard(
+    ThemeData theme,
+    ColorScheme cs,
+    bool isDark,
+    Color accent, {
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(22),
+        border:
+            isDark
+                ? Border.all(color: cs.outlineVariant.withOpacity(0.5))
+                : null,
+        boxShadow:
+            isDark
+                ? null
+                : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: Colors.green.shade600),
-          const SizedBox(width: 8),
-          Text(
-            title.toUpperCase(),
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: Colors.green.shade700,
-              letterSpacing: 1.2,
-            ),
+          // Section header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(isDark ? 0.15 : 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 18, color: accent),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                title.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: accent,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 18),
+          ...children,
         ],
       ),
     );
   }
 
-  Widget _buildImageSection() {
+  Widget _buildImageSection(
+    ThemeData theme,
+    ColorScheme cs,
+    bool isDark,
+    Color accent,
+  ) {
     return Center(
       child: Stack(
         children: [
           Container(
-            width: 120,
-            height: 120,
+            width: 110,
+            height: 110,
             decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: Colors.grey.shade200),
+              color: cs.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                color: isDark ? cs.outlineVariant : Colors.grey.shade200,
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withOpacity(isDark ? 0.2 : 0.05),
                   blurRadius: 20,
                   offset: const Offset(0, 10),
                 ),
               ],
             ),
-            child: _buildImageContent(),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: _buildImageContent(accent),
+            ),
           ),
           Positioned(
             bottom: 0,
@@ -393,12 +542,15 @@ class _AddJobScreenState extends State<AddJobScreen>
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.green.shade600,
+                  color: accent,
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 3),
+                  border: Border.all(
+                    color: theme.scaffoldBackgroundColor,
+                    width: 3,
+                  ),
                 ),
                 child: const Icon(
-                  Icons.camera_alt,
+                  Icons.camera_alt_rounded,
                   color: Colors.white,
                   size: 18,
                 ),
@@ -410,27 +562,38 @@ class _AddJobScreenState extends State<AddJobScreen>
     );
   }
 
-  Widget _buildJobTypeDropdown() {
+  Widget _buildJobTypeDropdown(
+    ThemeData theme,
+    ColorScheme cs,
+    bool isDark,
+    Color accent,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(18),
+        color: isDark ? cs.surfaceContainerHighest : const Color(0xFFF0F0F5),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButtonFormField<String>(
           value: _jobType,
-          style: TextStyle(color: Colors.blueGrey.shade800, fontSize: 15),
+          dropdownColor: isDark ? cs.surfaceContainerHighest : Colors.white,
+          style: TextStyle(color: cs.onSurface, fontSize: 15),
           decoration: InputDecoration(
-            label: const Text('Tipo de empleo'),
-            icon: Icon(Icons.timer_outlined, color: Colors.green.shade400),
+            label: Text(
+              'Tipo de empleo',
+              style: TextStyle(color: cs.onSurface.withOpacity(0.6)),
+            ),
+            icon: Icon(Icons.timer_outlined, color: accent),
             border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
           ),
           items:
               _jobTypes.map((type) {
                 return DropdownMenuItem(
                   value: type,
-                  child: Text(type.toUpperCase()),
+                  child: Text(_getJobTypeLabel(type)),
                 );
               }).toList(),
           onChanged: (val) => setState(() => _jobType = val!),
@@ -439,7 +602,119 @@ class _AddJobScreenState extends State<AddJobScreen>
     );
   }
 
-  Widget _buildRequirementsInput() {
+  String _getJobTypeLabel(String type) {
+    switch (type) {
+      case 'profesional':
+        return 'Profesional';
+      case 'temporal':
+        return 'Temporal';
+      case 'medio-tiempo':
+        return 'Medio Tiempo';
+      case 'por-obra':
+        return 'Por Obra';
+      case 'remoto':
+        return 'Remoto';
+      default:
+        return type[0].toUpperCase() + type.substring(1);
+    }
+  }
+
+  Widget _buildLocationPicker(
+    ThemeData theme,
+    ColorScheme cs,
+    bool isDark,
+    Color accent,
+  ) {
+    return GestureDetector(
+      onTap: () async {
+        final result = await Navigator.push<LocationPickerResult>(
+          context,
+          MaterialPageRoute(
+            builder:
+                (_) => LocationPickerScreen(
+                  initialAddress:
+                      locationCtrl.text.isNotEmpty ? locationCtrl.text : null,
+                  initialLat: _selectedLat,
+                  initialLng: _selectedLng,
+                ),
+          ),
+        );
+
+        if (result != null) {
+          setState(() {
+            locationCtrl.text = result.address;
+            _selectedLat = result.latitude;
+            _selectedLng = result.longitude;
+          });
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? cs.surfaceContainerHighest : const Color(0xFFF0F0F5),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: accent.withOpacity(isDark ? 0.2 : 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(Icons.map_outlined, color: accent, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    locationCtrl.text.isNotEmpty
+                        ? locationCtrl.text
+                        : 'Seleccionar en Mapa',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight:
+                          locationCtrl.text.isNotEmpty
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                      color:
+                          locationCtrl.text.isNotEmpty
+                              ? cs.onSurface
+                              : cs.onSurface.withOpacity(0.5),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (_selectedLat != null && _selectedLng != null)
+                    Text(
+                      '${_selectedLat!.toStringAsFixed(4)}, ${_selectedLng!.toStringAsFixed(4)}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurface.withOpacity(0.4),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: cs.onSurface.withOpacity(0.4),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRequirementsInput(
+    ThemeData theme,
+    ColorScheme cs,
+    bool isDark,
+    Color accent,
+    Color accentLight,
+  ) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -449,23 +724,27 @@ class _AddJobScreenState extends State<AddJobScreen>
             label: 'Agregar requisito',
             icon: Icons.check_circle_outline,
             hint: 'Ej: 2 años de exp.',
+            theme: theme,
+            cs: cs,
+            isDark: isDark,
+            accent: accentLight,
           ),
         ),
         const SizedBox(width: 12),
         Material(
-          color: Colors.green.shade600,
-          borderRadius: BorderRadius.circular(15),
+          color: accent,
+          borderRadius: BorderRadius.circular(14),
           child: InkWell(
             onTap: _addRequirement,
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(14),
             child: Container(
-              height: 56,
-              width: 56,
+              height: 52,
+              width: 52,
               alignment: Alignment.center,
               child: const Icon(
                 Icons.add_rounded,
                 color: Colors.white,
-                size: 28,
+                size: 26,
               ),
             ),
           ),
@@ -478,31 +757,42 @@ class _AddJobScreenState extends State<AddJobScreen>
     required TextEditingController controller,
     required String label,
     required IconData icon,
+    required ThemeData theme,
+    required ColorScheme cs,
+    required bool isDark,
+    required Color accent,
     int maxLines = 1,
     String? hint,
     TextInputType? keyboardType,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(18),
+        color: isDark ? cs.surfaceContainerHighest : const Color(0xFFF0F0F5),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: TextField(
         controller: controller,
         maxLines: maxLines,
         keyboardType: keyboardType,
-        style: TextStyle(color: Colors.blueGrey.shade900, fontSize: 15),
+        style: TextStyle(color: cs.onSurface, fontSize: 15),
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
-          prefixIcon: Icon(icon, color: Colors.green.shade400, size: 20),
+          prefixIcon: Icon(icon, color: accent, size: 20),
           border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: accent, width: 1.5),
+          ),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
-            vertical: 12,
+            vertical: 14,
           ),
+          labelStyle: TextStyle(color: cs.onSurface.withOpacity(0.5)),
+          hintStyle: TextStyle(color: cs.onSurface.withOpacity(0.3)),
           floatingLabelStyle: TextStyle(
-            color: Colors.green.shade700,
+            color: accent,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -510,7 +800,7 @@ class _AddJobScreenState extends State<AddJobScreen>
     );
   }
 
-  Widget _buildImageContent() {
+  Widget _buildImageContent(Color accent) {
     if (_imageFile != null) {
       return Stack(
         fit: StackFit.expand,
@@ -534,7 +824,7 @@ class _AddJobScreenState extends State<AddJobScreen>
       return Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Colors.green.shade300, Colors.green.shade500],
+            colors: [accent.withOpacity(0.7), accent],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -542,7 +832,7 @@ class _AddJobScreenState extends State<AddJobScreen>
         child: const Center(
           child: Icon(
             Icons.add_photo_alternate_outlined,
-            size: 40,
+            size: 36,
             color: Colors.white,
           ),
         ),
@@ -559,18 +849,26 @@ class _AddJobScreenState extends State<AddJobScreen>
     );
   }
 
-  Widget _buildSubmitButton() {
+  Widget _buildSubmitButton(
+    ThemeData theme,
+    ColorScheme cs,
+    bool isDark,
+    Color accent,
+  ) {
     return Container(
       height: 56,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.green.shade600, Colors.green.shade800],
+          colors:
+              isDark
+                  ? [accent.withOpacity(0.9), accent.withOpacity(0.7)]
+                  : [Colors.green.shade600, Colors.green.shade800],
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.green.withOpacity(0.4),
-            blurRadius: 12,
+            color: accent.withOpacity(isDark ? 0.2 : 0.35),
+            blurRadius: 14,
             offset: const Offset(0, 6),
           ),
         ],
@@ -581,7 +879,7 @@ class _AddJobScreenState extends State<AddJobScreen>
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(18),
           ),
         ),
         child:
@@ -606,9 +904,9 @@ class _AddJobScreenState extends State<AddJobScreen>
                       isEditing ? 'GUARDAR CAMBIOS' : 'PUBLICAR EMPLEO',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
                       ),
                     ),
                   ],
@@ -633,7 +931,12 @@ class _AddJobScreenState extends State<AddJobScreen>
     });
   }
 
-  Widget _buildRequirementsChips() {
+  Widget _buildRequirementsChips(
+    ThemeData theme,
+    ColorScheme cs,
+    bool isDark,
+    Color accent,
+  ) {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -642,17 +945,21 @@ class _AddJobScreenState extends State<AddJobScreen>
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.green.shade50,
+                color: accent.withOpacity(isDark ? 0.12 : 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.green.shade100),
+                border: Border.all(
+                  color: accent.withOpacity(isDark ? 0.2 : 0.15),
+                ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  Icon(Icons.check_circle, size: 14, color: accent),
+                  const SizedBox(width: 6),
                   Text(
                     req,
                     style: TextStyle(
-                      color: Colors.green.shade800,
+                      color: isDark ? accent : Colors.green.shade800,
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
@@ -663,7 +970,7 @@ class _AddJobScreenState extends State<AddJobScreen>
                     child: Icon(
                       Icons.close_rounded,
                       size: 16,
-                      color: Colors.green.shade600,
+                      color: accent.withOpacity(0.7),
                     ),
                   ),
                 ],

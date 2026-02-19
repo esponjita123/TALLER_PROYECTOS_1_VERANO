@@ -6,7 +6,7 @@ class Job {
   String location;
   String phone;
   String imagePath; // ruta local de la imagen
-  String jobType; // full-time, part-time, remote, contract
+  String jobType; // profesional, temporal, medio-tiempo, por-obra, remoto
   double salaryMin;
   double salaryMax;
   List<String> requirements;
@@ -15,6 +15,17 @@ class Job {
   double relevanceScore; // Para ordenamiento por relevancia
   String employerEmail; // Email del empleador que publicó
   double matchScore; // Score de match calculado dinámicamente (no se persiste)
+
+  // Campos para geolocalización
+  double? lat;
+  double? lng;
+
+  // Campos para empleos temporales/gigs
+  bool isTemporary; // Es trabajo temporal/gig
+  int? durationHours; // Duración en horas (para trabajos temporales)
+  DateTime? startDate; // Fecha de inicio
+  DateTime? endDate; // Fecha de fin
+  bool useCurrentLocation; // Usar ubicación GPS actual
 
   Job({
     this.id,
@@ -33,6 +44,13 @@ class Job {
     this.relevanceScore = 0,
     this.employerEmail = '',
     this.matchScore = 0.0,
+    this.lat,
+    this.lng,
+    this.isTemporary = false,
+    this.durationHours,
+    this.startDate,
+    this.endDate,
+    this.useCurrentLocation = false,
   }) : requirements = requirements ?? [],
        postedDate = postedDate ?? DateTime.now(),
        applicantEmails = applicantEmails ?? [];
@@ -54,6 +72,13 @@ class Job {
       'applicantEmails': applicantEmails,
       'relevanceScore': relevanceScore,
       'employerEmail': employerEmail,
+      'lat': lat,
+      'lng': lng,
+      'isTemporary': isTemporary,
+      'durationHours': durationHours,
+      'startDate': startDate?.toIso8601String(),
+      'endDate': endDate?.toIso8601String(),
+      'useCurrentLocation': useCurrentLocation,
     };
   }
 
@@ -77,6 +102,14 @@ class Job {
       applicantEmails: List<String>.from(json['applicantEmails'] ?? []),
       relevanceScore: (json['relevanceScore'] ?? 0).toDouble(),
       employerEmail: json['employerEmail'] ?? '',
+      lat: json['lat']?.toDouble(),
+      lng: json['lng']?.toDouble(),
+      isTemporary: json['isTemporary'] ?? false,
+      durationHours: json['durationHours'],
+      startDate:
+          json['startDate'] != null ? DateTime.parse(json['startDate']) : null,
+      endDate: json['endDate'] != null ? DateTime.parse(json['endDate']) : null,
+      useCurrentLocation: json['useCurrentLocation'] ?? false,
     );
   }
 }
